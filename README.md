@@ -61,7 +61,7 @@ npm run start
 
 Luego abrí [http://localhost:3000](http://localhost:3000). La navegación es más rápida al no haber compilación en caliente.
 
----
+-----
 
 ## Estructura del proyecto
 
