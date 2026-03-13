@@ -12,8 +12,8 @@ import { NOMBRES_POSICIONES, MAX_CAMBIOS_POR_FECHA, MAX_JUGADORES_MISMO_CLUB } f
 import RugbyField from '@/components/RugbyField';
 import PlayerModal from '@/components/PlayerModal';
 import { LoadingView } from '@/components/LoadingView';
+import Image from 'next/image';
 import { Loader2, X, RotateCcw } from 'lucide-react';
-import { RugbyBallIcon } from '@/components/icons/RugbyBallIcon';
 import { withTimeout } from '@/utils/withTimeout';
 
 const API_TIMEOUT_MS = 20000;
@@ -210,9 +210,9 @@ export default function MiEquipoPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-4xl mx-auto">
-      <header className="pt-4 pb-2 px-6 text-center">
+    <div className="min-h-screen flex flex-col">
+      <div className="max-w-4xl mx-auto flex flex-col flex-1 min-h-0 w-full">
+      <header className="pt-4 pb-2 px-6 text-center shrink-0">
         <h1 className="text-2xl md:text-3xl font-bold text-oro">
           {fechaActiva ? 'Armá tu equipo' : fechaEnJuegoNum != null ? 'Fecha en juego' : 'Mi Equipo'}
         </h1>
@@ -225,8 +225,8 @@ export default function MiEquipoPage() {
                 onClick={() => !readOnly && setModalCP('capitan')}
                 className={`flex-1 flex items-center gap-2 bg-oro/90 hover:bg-oro transition-colors rounded-none py-2 px-3 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
               >
-                <div className="w-7 h-7 rounded-md bg-oro-bright flex items-center justify-center text-[11px] font-bold text-bordo-dark shrink-0">
-                  C
+                <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
+                  <Image src="/captain-band.png" alt="" width={28} height={28} className="object-contain" />
                 </div>
                 <div className="text-left min-w-0">
                   <p className="text-[10px] text-white/95 font-medium">Capitán</p>
@@ -239,8 +239,8 @@ export default function MiEquipoPage() {
                 onClick={() => !readOnly && setModalCP('pateador')}
                 className={`flex-1 flex items-center gap-2 bg-azul hover:bg-azul/90 transition-colors rounded-none py-2 px-3 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
               >
-                <div className="w-7 h-7 rounded-md bg-azul flex items-center justify-center border border-white/30 text-white shrink-0">
-                  <RugbyBallIcon size={12} />
+                <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
+                  <Image src="/rugby-ball.png" alt="" width={28} height={28} className="object-contain" />
                 </div>
                 <div className="text-left min-w-0">
                   <p className="text-[10px] text-white/90 font-medium">Pateador</p>
@@ -254,21 +254,25 @@ export default function MiEquipoPage() {
         )}
       </header>
 
-      <div className="px-4 pb-6 max-w-4xl mx-auto">
+      <div className="px-4 pb-6 flex-1 min-h-0 flex flex-col max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="flex-1 min-h-0 flex flex-col min-w-0"
         >
-          <RugbyField
-            jugadores={equipo} jugadoresData={jugadoresData}
-            onPositionPress={pos => !readOnly && setSelectedPos(pos)}
-            selectedPosicion={selectedPos} capitanId={capitanId} pateadorId={pateadorId}
-            readOnly={readOnly} equipoAnterior={equipoAnterior}
-          />
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col">
+            <RugbyField
+              jugadores={equipo} jugadoresData={jugadoresData}
+              onPositionPress={pos => !readOnly && setSelectedPos(pos)}
+              selectedPosicion={selectedPos} capitanId={capitanId} pateadorId={pateadorId}
+              readOnly={readOnly} equipoAnterior={equipoAnterior}
+              fillOnMobile
+            />
+          </div>
         </motion.div>
         {saving && (
-          <div className="flex items-center justify-center gap-2 py-3">
+          <div className="flex items-center justify-center gap-2 py-3 shrink-0">
             <Loader2 size={16} className="animate-spin text-azul" />
             <span className="text-sm text-white/80">Guardando...</span>
           </div>

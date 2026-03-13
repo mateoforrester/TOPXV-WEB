@@ -80,12 +80,12 @@ function JerseySlot({
         </span>
         {isCapitan && (
           <div className="absolute -top-1 -right-1 w-[18px] h-[10px] flex items-center justify-center">
-            <Image src="/cinta-capitan.png" alt="Capitán" width={18} height={10} className="object-contain" />
+            <Image src="/captain-band.png" alt="Capitán" width={18} height={10} className="object-contain" />
           </div>
         )}
         {isPateador && (
           <div className="absolute -top-1 -left-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center">
-            <Image src="/pelota-rugby.png" alt="Pateador" width={24} height={24} className="object-contain" />
+            <Image src="/rugby-ball.png" alt="Pateador" width={24} height={24} className="object-contain" />
           </div>
         )}
       </div>
@@ -107,6 +107,8 @@ interface RugbyFieldProps {
   pateadorId?: string;
   readOnly?: boolean;
   equipoAnterior?: EquipoFecha | null;
+  /** En móvil, la cancha ocupa todo el alto disponible (flex-1). En desktop se mantiene aspect ratio. */
+  fillOnMobile?: boolean;
 }
 
 export default function RugbyField({
@@ -118,13 +120,16 @@ export default function RugbyField({
   pateadorId,
   readOnly = false,
   equipoAnterior = null,
+  fillOnMobile = false,
 }: RugbyFieldProps) {
   return (
     <div
-      className="relative w-full overflow-hidden rounded-3xl"
+      className={`relative w-full overflow-hidden rounded-3xl ${
+        fillOnMobile
+          ? 'min-h-0 h-full aspect-auto md:aspect-[16/9] md:h-auto md:min-h-[min(72vh,56vw)]'
+          : 'aspect-[16/9] min-h-[min(72vh,56vw)]'
+      }`}
       style={{
-        aspectRatio: '16/9',
-        minHeight: 'min(72vh, 56vw)',
         backgroundImage: 'url(/field.png)',
         backgroundSize: '100% 100%',
         backgroundPosition: 'center',
