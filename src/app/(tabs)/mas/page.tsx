@@ -102,7 +102,7 @@ export default function MasPage() {
 
         <div className="flex flex-col items-center pt-6 pb-4 opacity-80">
           <div className="relative w-28 h-16">
-            <Image src="/logo1.png" alt="TOP XV" fill className="object-contain" sizes="112px" />
+            <Image src="/logo.png" alt="TOP XV" fill className="object-contain" sizes="112px" />
           </div>
           <p className="text-xs text-white/50 font-semibold tracking-wider mt-1">TOP XV</p>
         </div>

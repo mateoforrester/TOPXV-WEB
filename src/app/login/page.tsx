@@ -95,7 +95,7 @@ export default function LoginPage() {
       >
         <div className="flex justify-center mb-8">
           <div className="relative w-24 h-24">
-            <Image src="/logo1.png" alt="TOP XV" fill className="object-contain" sizes="96px" priority />
+            <Image src="/logo.png" alt="TOP XV" fill className="object-contain" sizes="96px" priority />
           </div>
         </div>
 

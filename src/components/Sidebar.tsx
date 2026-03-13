@@ -29,10 +29,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const handleCerrarSesion = async () => {
     try {
       await signOut();
-      router.replace('/login');
+      window.location.href = '/login';
     } catch (e) {
       console.error('Error al cerrar sesion:', e);
-      router.replace('/login');
+      window.location.href = '/login';
     }
   };
 
@@ -40,7 +40,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <div className="p-6 flex items-center gap-3">
         <div className="relative w-10 h-10">
-          <Image src="/logo1.png" alt="TOP XV" fill className="object-contain" sizes="40px" />
+          <Image src="/logo.png" alt="TOP XV" fill className="object-contain" sizes="40px" />
         </div>
         <div>
           <h1 className="text-oro font-bold text-lg leading-tight">TOP XV</h1>
@@ -128,7 +128,7 @@ export default function Sidebar() {
         </button>
         <div className="flex items-center gap-2 ml-3">
           <div className="relative w-7 h-7">
-            <Image src="/logo1.png" alt="TOP XV" fill className="object-contain" sizes="40px" />
+            <Image src="/logo.png" alt="TOP XV" fill className="object-contain" sizes="40px" />
           </div>
           <span className="text-oro font-bold text-base">TOP XV</span>
         </div>
