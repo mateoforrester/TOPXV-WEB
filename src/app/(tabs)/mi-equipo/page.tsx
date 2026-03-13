@@ -212,37 +212,39 @@ export default function MiEquipoPage() {
   return (
     <div className="min-h-screen">
       <div className="max-w-4xl mx-auto">
-      <header className="pt-8 pb-4 px-8 text-center">
-        <h1 className="text-3xl font-bold text-oro">
+      <header className="pt-4 pb-2 px-6 text-center">
+        <h1 className="text-2xl md:text-3xl font-bold text-oro">
           {fechaActiva ? 'Armá tu equipo' : fechaEnJuegoNum != null ? 'Fecha en juego' : 'Mi Equipo'}
         </h1>
         {subtitle && <p className="text-white/70 text-sm mt-1">{subtitle}</p>}
         {/* Barra Capitán / Pateador como en mobile: mitad oro, mitad azul */}
         {jugadoresDelEquipo.length === 15 && (
-          <div className="mt-4 max-w-md mx-auto">
-            <div className="flex items-stretch rounded-2xl overflow-hidden border border-white/15 shadow-lg">
+          <div className="mt-3 max-w-sm mx-auto">
+            <div className="flex items-stretch rounded-2xl overflow-hidden border border-white/15 shadow-lg text-left">
               <button
                 onClick={() => !readOnly && setModalCP('capitan')}
-                className={`flex-1 flex items-center gap-2.5 bg-oro/90 hover:bg-oro transition-colors rounded-none py-3 px-4 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
+                className={`flex-1 flex items-center gap-2 bg-oro/90 hover:bg-oro transition-colors rounded-none py-2 px-3 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
               >
-                <div className="w-8 h-8 rounded-full bg-oro-bright flex items-center justify-center text-sm font-bold text-bordo-dark shrink-0">C</div>
+                <div className="w-7 h-7 rounded-md bg-oro-bright flex items-center justify-center text-[11px] font-bold text-bordo-dark shrink-0">
+                  C
+                </div>
                 <div className="text-left min-w-0">
-                  <p className="text-[11px] text-white/95 font-medium">Capitán</p>
-                  <p className="text-sm font-semibold text-white truncate max-w-[100px]">
+                  <p className="text-[10px] text-white/95 font-medium">Capitán</p>
+                  <p className="text-xs md:text-sm font-semibold text-white truncate max-w-[100px]">
                     {capitanId && jugadoresData[capitanId] ? jugadoresData[capitanId].apellido : 'Elegir'}
                   </p>
                 </div>
               </button>
               <button
                 onClick={() => !readOnly && setModalCP('pateador')}
-                className={`flex-1 flex items-center gap-2.5 bg-azul hover:bg-azul/90 transition-colors rounded-none py-3 px-4 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
+                className={`flex-1 flex items-center gap-2 bg-azul hover:bg-azul/90 transition-colors rounded-none py-2 px-3 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
               >
-                <div className="w-8 h-8 rounded-full bg-azul flex items-center justify-center border-2 border-white/30 text-white shrink-0">
-                  <RugbyBallIcon size={14} />
+                <div className="w-7 h-7 rounded-md bg-azul flex items-center justify-center border border-white/30 text-white shrink-0">
+                  <RugbyBallIcon size={12} />
                 </div>
                 <div className="text-left min-w-0">
-                  <p className="text-[11px] text-white/90 font-medium">Pateador</p>
-                  <p className="text-sm font-semibold text-white truncate max-w-[100px]">
+                  <p className="text-[10px] text-white/90 font-medium">Pateador</p>
+                  <p className="text-xs md:text-sm font-semibold text-white truncate max-w-[100px]">
                     {pateadorId && jugadoresData[pateadorId] ? jugadoresData[pateadorId].apellido : 'Elegir'}
                   </p>
                 </div>
@@ -252,7 +254,7 @@ export default function MiEquipoPage() {
         )}
       </header>
 
-      <div className="px-8 pb-8 max-w-4xl mx-auto">
+      <div className="px-4 pb-6 max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}

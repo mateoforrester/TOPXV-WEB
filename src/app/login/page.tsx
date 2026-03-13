@@ -93,10 +93,12 @@ export default function LoginPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <div className="flex justify-center mb-8">
+        <div className="flex flex-col items-center mb-8">
           <div className="relative w-24 h-24">
             <Image src="/logo.png" alt="TOP XV" fill className="object-contain" sizes="96px" priority />
           </div>
+          <p className="text-oro font-semibold text-lg mt-4 text-center">Armá tu equipo. Sumá puntos.</p>
+          <p className="text-oro/90 font-medium text-base mt-1 text-center">Ganá la liga.</p>
         </div>
 
         <div className="rounded-3xl border border-oro/40 bg-bordo-dark/95 shadow-2xl p-8">

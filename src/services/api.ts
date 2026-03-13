@@ -87,13 +87,18 @@ export async function getJugadoresByIds(ids: string[]): Promise<Jugador[]> {
 }
 
 export async function getJugadoresListado(opts?: {
-  activo?: boolean; orderBy?: 'puntos_totales' | 'apellido';
+  activo?: boolean;
+  posicion_ids?: number[];
+  orderBy?: 'puntos_totales' | 'apellido' | 'club';
 }): Promise<JugadorListado[]> {
   let query = supabase.from('v_jugadores_listado').select('*');
   if (opts?.activo !== undefined) query = query.eq('activo', opts.activo);
+  if (opts?.posicion_ids?.length) query = query.in('posicion_id', opts.posicion_ids);
   const orderBy = opts?.orderBy ?? 'puntos_totales';
   if (orderBy === 'puntos_totales') {
     query = query.order('puntos_totales', { ascending: false }).order('apellido', { ascending: true });
+  } else if (orderBy === 'club') {
+    query = query.order('club_nombre', { ascending: true }).order('apellido', { ascending: true }).order('nombre', { ascending: true });
   } else {
     query = query.order('apellido', { ascending: true }).order('nombre', { ascending: true });
   }

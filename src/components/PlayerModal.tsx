@@ -2,33 +2,39 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Jugador, JugadorPosicion } from '@/types';
-import { getJugadores } from '@/services/api';
-import { NOMBRES_POSICIONES, POSICION_A_POSICION_IDS, MAX_JUGADORES_MISMO_CLUB } from '@/utils/constants';
+import { JugadorListado, JugadorPosicion } from '@/types';
+import { getJugadoresListado } from '@/services/api';
+import { NOMBRES_POSICIONES, POSICION_A_POSICION_IDS } from '@/utils/constants';
 import { X, Search, Loader2 } from 'lucide-react';
 
 interface PlayerModalProps {
   posicion: number | null;
   equipo: JugadorPosicion[];
-  jugadoresData: Record<string, Jugador>;
+  jugadoresData: Record<string, any>;
   onSelect: (jugadorId: string) => void;
   onClose: () => void;
 }
 
 export default function PlayerModal({ posicion, equipo, jugadoresData, onSelect, onClose }: PlayerModalProps) {
-  const [jugadores, setJugadores] = useState<Jugador[]>([]);
+  const [jugadores, setJugadores] = useState<JugadorListado[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [selectedClub, setSelectedClub] = useState<string | 'ALL'>('ALL');
+  const [clubDropdownOpen, setClubDropdownOpen] = useState(false);
 
   const loadJugadores = useCallback(() => {
     if (posicion === null) return;
     setSearch('');
+    setSelectedClub('ALL');
     setLoading(true);
     setError(null);
     const ids = POSICION_A_POSICION_IDS[posicion] ?? [posicion];
-    getJugadores({ posicion_ids: ids, activo: true })
-      .then((data) => { setJugadores(data ?? []); setError(null); })
+    getJugadoresListado({ activo: true, posicion_ids: ids, orderBy: 'puntos_totales' })
+      .then((data) => {
+        setJugadores(data ?? []);
+        setError(null);
+      })
       .catch((e) => {
         console.error('Error loading jugadores:', e);
         setError('No se pudieron cargar jugadores. Reintenta.');
@@ -46,18 +52,32 @@ export default function PlayerModal({ posicion, equipo, jugadoresData, onSelect,
     );
   }, [equipo, posicion]);
 
+  const clubesDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    jugadores.forEach(j => {
+      if (j.club_nombre) set.add(j.club_nombre);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [jugadores]);
+
   const filtered = useMemo(() => {
     let list = jugadores.filter(j => !idsEnOtrasPosiciones.has(j.id));
+
+    if (selectedClub !== 'ALL') {
+      list = list.filter(j => j.club_nombre === selectedClub);
+    }
+
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(j =>
         j.apellido.toLowerCase().includes(q) ||
         j.nombre.toLowerCase().includes(q) ||
-        (j.club?.nombre || '').toLowerCase().includes(q)
+        (j.club_nombre || '').toLowerCase().includes(q)
       );
     }
+
     return list;
-  }, [jugadores, search, idsEnOtrasPosiciones]);
+  }, [jugadores, search, idsEnOtrasPosiciones, selectedClub]);
 
   if (posicion === null) return null;
 
@@ -87,12 +107,43 @@ export default function PlayerModal({ posicion, equipo, jugadoresData, onSelect,
           </div>
 
           {/* Search */}
-          <div className="px-5 py-3">
+          <div className="px-5 py-3 space-y-2">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar jugador o club..."
-                className="w-full pl-9 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-white/95 placeholder-white/40 text-sm focus:outline-none focus:ring-2 focus:ring-oro focus:border-oro" />
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/10 text-white/95 placeholder-white/40 text-sm focus:outline-none focus:ring-2 focus:ring-oro focus:border-oro"
+              />
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setClubDropdownOpen(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-left text-sm text-white/95"
+              >
+                <span>{selectedClub === 'ALL' ? 'Todos los clubes' : selectedClub}</span>
+                <span className="text-white/50">▼</span>
+              </button>
+              {clubDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setClubDropdownOpen(false)} aria-hidden />
+                  <div className="absolute top-full left-0 right-0 mt-1 rounded-xl bg-[#2b0a10] border border-oro/30 shadow-xl max-h-48 overflow-y-auto z-50 py-1">
+                    <button type="button" onClick={() => { setSelectedClub('ALL'); setClubDropdownOpen(false); }}
+                      className={`w-full px-4 py-2.5 text-left text-sm ${selectedClub === 'ALL' ? 'bg-oro/30 text-oro font-semibold' : 'text-white/90 hover:bg-white/10'}`}>
+                      Todos
+                    </button>
+                    {clubesDisponibles.map((club) => (
+                      <button key={club} type="button" onClick={() => { setSelectedClub(club); setClubDropdownOpen(false); }}
+                        className={`w-full px-4 py-2.5 text-left text-sm ${selectedClub === club ? 'bg-oro/30 text-oro font-semibold' : 'text-white/90 hover:bg-white/10'}`}>
+                        {club}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -117,13 +168,17 @@ export default function PlayerModal({ posicion, equipo, jugadoresData, onSelect,
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white/95">{j.apellido} {j.nombre}</p>
-                  {j.club && (
-                    <span className="inline-block bg-azul/50 px-2 py-0.5 rounded text-xs text-white/70 mt-1">
-                      {j.club.nombre}
+                  <div className="flex items-center gap-2 mt-1">
+                    {j.club_nombre && (
+                      <span className="inline-block bg-azul/50 px-2 py-0.5 rounded text-[11px] text-white/75">
+                        {j.club_nombre}
+                      </span>
+                    )}
+                    <span className="inline-block text-[11px] text-oro/90 font-semibold">
+                      {j.puntos_totales} pts
                     </span>
-                  )}
+                  </div>
                 </div>
-                <span className="text-white/40 text-xl ml-2">&rsaquo;</span>
               </button>
             ))}
           </div>
