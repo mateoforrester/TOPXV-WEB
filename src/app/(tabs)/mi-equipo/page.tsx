@@ -254,14 +254,14 @@ export default function MiEquipoPage() {
         )}
       </header>
 
-      <div className="px-4 pb-6 flex-1 min-h-0 flex flex-col max-w-4xl mx-auto">
+      <div className="px-4 pb-6 flex-1 min-h-0 flex flex-col w-full">
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="flex-1 min-h-0 flex flex-col min-w-0"
         >
-          <div className="flex-1 min-h-0 min-w-0 flex flex-col min-h-[60vh] md:min-h-0">
+          <div className="flex-1 min-w-0 flex flex-col min-h-[60vh] md:min-h-0">
             <RugbyField
               jugadores={equipo} jugadoresData={jugadoresData}
               onPositionPress={pos => !readOnly && setSelectedPos(pos)}

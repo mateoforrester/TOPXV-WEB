@@ -126,7 +126,7 @@ export default function RugbyField({
     <div
       className={`relative w-full overflow-hidden rounded-3xl ${
         fillOnMobile
-          ? 'flex-1 min-h-0 min-h-[55vh] h-[62vh] aspect-auto md:aspect-[16/9] md:h-auto md:flex-initial md:min-h-0 md:min-h-[min(72vh,56vw)]'
+          ? 'flex-1 min-h-[55vh] h-[62vh] aspect-auto md:aspect-[16/9] md:h-auto md:flex-initial md:min-h-[min(72vh,56vw)]'
           : 'aspect-[16/9] min-h-[min(72vh,56vw)]'
       }`}
       style={{
