@@ -261,7 +261,7 @@ export default function MiEquipoPage() {
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="flex-1 min-h-0 flex flex-col min-w-0"
         >
-          <div className="flex-1 min-h-0 min-w-0 flex flex-col">
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col min-h-[60vh] md:min-h-0">
             <RugbyField
               jugadores={equipo} jugadoresData={jugadoresData}
               onPositionPress={pos => !readOnly && setSelectedPos(pos)}

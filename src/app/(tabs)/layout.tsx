@@ -24,7 +24,7 @@ export default function TabsLayout({ children }: { children: React.ReactNode }) 
   if (!user) return null;
 
   return (
-    <div className="flex min-h-screen h-dvh">
+    <div className="flex min-h-screen min-h-dvh bg-gradient-to-b from-bordo-deep to-bordo-dark">
       <Sidebar />
       <main className="flex-1 min-h-screen bg-gradient-to-b from-bordo-deep to-bordo-dark pt-14 lg:pt-0 lg:ml-64">
         {children}

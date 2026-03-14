@@ -6,7 +6,7 @@
 
 @layer base {
   body {
-    @apply bg-cream text-gray-900 antialiased;
+    @apply bg-bordo-dark text-gray-900 antialiased;
     font-family: 'Inter', system-ui, sans-serif;
   }
 }
