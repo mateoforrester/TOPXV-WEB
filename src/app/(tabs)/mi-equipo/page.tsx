@@ -210,7 +210,7 @@ export default function MiEquipoPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen h-full flex flex-col">
       <div className="max-w-4xl mx-auto flex flex-col flex-1 min-h-0 w-full">
       <header className="pt-4 pb-2 px-6 text-center shrink-0">
         <h1 className="text-2xl md:text-3xl font-bold text-oro">
