@@ -39,22 +39,38 @@ export default function AyudaPage() {
             <strong className="text-oro">pateador</strong> entre ellos.
           </p>
           <p className="text-sm text-white/90 leading-relaxed">
-            Los puntos de tu equipo se suman segun lo que hagan tus jugadores en los partidos de cada fecha.
+            Los puntos de tu equipo se calculan segun lo que hagan tus jugadores en los partidos de cada fecha.
           </p>
         </Section>
 
-        <Section title="Como suman puntos" delay={0.05}>
+        <Section title="Puntaje de jugadores" delay={0.05}>
           <ul className="space-y-1 text-sm text-white/90">
+            <li>• Titularidad: +5 pts</li>
+            <li>• Victoria: +2 pts</li>
+            <li>• Victoria como visitante: +1 pt</li>
+            <li>• Bonus ofensivo (4+ tries de equipo): +1 pt</li>
+            <li>• Bonus defensivo (derrota por 7 o menos): +1 pt</li>
             <li>• Try: 5 pts</li>
-            <li>• Conversion: 2 pts</li>
-            <li>• Penal: 3 pts</li>
             <li>• Drop: 3 pts</li>
             <li>• Tarjeta amarilla: -2 pts</li>
-            <li>• Tarjeta roja: -5 pts</li>
-            <li>• Figura del partido: puntos extra</li>
+            <li>• Tarjeta roja: -4 pts</li>
+            <li>• Figura del partido: +5 pts</li>
+            <li>• Punto de oro: +5 pts</li>
           </ul>
           <p className="text-sm text-white/90 leading-relaxed">
-            Tu capitan duplica los puntos que haga ese jugador. Tu pateador suma ademas por conversiones, penales y drops que patee.
+            Las conversiones (+2) y penales (+3) solo suman para el jugador que elegiste como <strong className="text-oro">pateador</strong>.
+          </p>
+          <p className="text-sm text-white/90 leading-relaxed">
+            Resumen clave: <strong className="text-oro">victoria</strong>, <strong className="text-oro">victoria visitante</strong>, <strong className="text-oro">bonus ofensivo</strong> y <strong className="text-oro">bonus defensivo</strong> solo aplican a jugadores titulares.
+          </p>
+        </Section>
+
+        <Section title="Capitan y pateador" delay={0.08}>
+          <p className="text-sm text-white/90 leading-relaxed">
+            El <strong className="text-oro">capitan</strong> aplica multiplicador sobre sus puntos en tu equipo fantasy.
+          </p>
+          <p className="text-sm text-white/90 leading-relaxed">
+            El <strong className="text-oro">pateador</strong> es el unico que suma conversiones y penales.
           </p>
         </Section>
 
@@ -64,6 +80,9 @@ export default function AyudaPage() {
           </p>
           <p className="text-sm text-white/90 leading-relaxed">
             De un mismo club podes tener como maximo <strong className="text-oro">{MAX_JUGADORES_MISMO_CLUB} jugadores</strong> en tu equipo.
+          </p>
+          <p className="text-sm text-white/90 leading-relaxed">
+            No podes repetir el mismo jugador en dos posiciones del equipo.
           </p>
         </Section>
 

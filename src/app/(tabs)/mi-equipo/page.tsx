@@ -4,8 +4,10 @@ import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  getEstadoVentanaFecha, getFechaPorNumero, getEquipoFecha,
-  saveEquipoFecha, getJugadoresByIds,
+  getEstadoVentanaFecha, getFechaPorNumero, getEquipoFecha, getFechas,
+  saveEquipoFecha, getJugadoresByIds, getPuntajesJugadoresFecha,
+  ultimaFechaCompletada,
+  type PuntajeJugadorDetalle,
 } from '@/services/api';
 import { Fecha, EquipoFecha, JugadorPosicion, Jugador } from '@/types';
 import { NOMBRES_POSICIONES, MAX_CAMBIOS_POR_FECHA, MAX_JUGADORES_MISMO_CLUB } from '@/utils/constants';
@@ -13,6 +15,7 @@ import RugbyField from '@/components/RugbyField';
 import PlayerModal from '@/components/PlayerModal';
 import { LoadingView } from '@/components/LoadingView';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, X, RotateCcw } from 'lucide-react';
 import { withTimeout } from '@/utils/withTimeout';
 
@@ -39,8 +42,12 @@ function countCambios(jugadores: JugadorPosicion[], anterior: EquipoFecha | null
 
 export default function MiEquipoPage() {
   const { user, usuario } = useAuth();
+  const searchParams = useSearchParams();
   const [fechaActiva, setFechaActiva] = useState<Fecha | null>(null);
   const [fechaEnJuegoNum, setFechaEnJuegoNum] = useState<number | null>(null);
+  const [fechas, setFechas] = useState<Fecha[]>([]);
+  const [fechaDefaultId, setFechaDefaultId] = useState<string | null>(null);
+  const [fechaVisualizadaId, setFechaVisualizadaId] = useState<string | null>(null);
   const [equipo, setEquipo] = useState<JugadorPosicion[]>(initialJugadores);
   const [equipoAnterior, setEquipoAnterior] = useState<EquipoFecha | null>(null);
   const [jugadoresData, setJugadoresData] = useState<Record<string, Jugador>>({});
@@ -54,6 +61,80 @@ export default function MiEquipoPage() {
   const [modalCP, setModalCP] = useState<'capitan' | 'pateador' | null>(null);
   const [limitModal, setLimitModal] = useState<'club' | 'cambios' | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [puntajesFechaByJugador, setPuntajesFechaByJugador] = useState<Record<string, PuntajeJugadorDetalle>>({});
+  const [selectedDesgloseJugadorId, setSelectedDesgloseJugadorId] = useState<string | null>(null);
+  const [desgloseFuente, setDesgloseFuente] = useState<'visualizada' | 'ultimaFecha'>('visualizada');
+
+  // Datos para la solapa "Puntos última fecha" (solo cuando el usuario está editando su equipo).
+  const [ultimaEquipo, setUltimaEquipo] = useState<JugadorPosicion[] | null>(null);
+  const [jugadoresUltimaData, setJugadoresUltimaData] = useState<Record<string, Jugador>>({});
+  const [puntajesUltimaByJugador, setPuntajesUltimaByJugador] = useState<Record<string, PuntajeJugadorDetalle>>({});
+  const [ultimaCapitanId, setUltimaCapitanId] = useState<string | undefined>();
+  const [ultimaPateadorId, setUltimaPateadorId] = useState<string | undefined>();
+  const [showPuntosUltimaFecha, setShowPuntosUltimaFecha] = useState(false);
+  const [loadingPuntosUltimaFecha, setLoadingPuntosUltimaFecha] = useState(false);
+  const [ultimaFechaLoadedId, setUltimaFechaLoadedId] = useState<string | null>(null);
+
+  const armarEquipoCompleto = (raw: JugadorPosicion[]): JugadorPosicion[] => {
+    const byPos = new Map(raw.map(j => [j.posicion, j]));
+    const full: JugadorPosicion[] = [];
+    for (let p = 1; p <= 15; p++) full.push(byPos.get(p) || { posicion: p, jugador_id: '' });
+    return full;
+  };
+
+  const hydrateJugadores = async (full: JugadorPosicion[]) => {
+    const ids = full.map(j => j.jugador_id).filter(Boolean) as string[];
+    if (ids.length === 0) {
+      setJugadoresData({});
+      return;
+    }
+    const data = await getJugadoresByIds(ids);
+    const m: Record<string, Jugador> = {};
+    data.forEach(j => { m[j.id] = j; });
+    setJugadoresData(m);
+  };
+
+  const loadEquipoVisualizado = async (uid: string, viewedFechaId: string) => {
+    const isFechaEditableSeleccionada = !!fechaActiva && viewedFechaId === fechaActiva.id && fechaEnJuegoNum == null;
+
+    if (isFechaEditableSeleccionada) {
+      setJustSelectedPositions([]);
+      const fecha = fechaActiva!;
+      const [equipoData, fechaAnterior] = await Promise.all([
+        getEquipoFecha(uid, fecha.id),
+        getFechaPorNumero(fecha.numero - 1),
+      ]);
+      let anterior: EquipoFecha | null = null;
+      if (fechaAnterior) {
+        const ea = await getEquipoFecha(uid, fechaAnterior.id);
+        if (ea?.jugadores?.length) anterior = { ...ea, jugadores: normalizarJugadores(ea.jugadores) };
+        else anterior = ea;
+      }
+      setEquipoAnterior(anterior);
+      const tieneActual = equipoData?.jugadores?.length && equipoData.jugadores.some((j: { jugador_id?: string | null }) => j.jugador_id);
+      // Prioridad de carga para la fecha editable: actual -> anterior -> vacio.
+      const raw = tieneActual
+        ? normalizarJugadores(equipoData!.jugadores)
+        : (anterior?.jugadores?.length ? normalizarJugadores(anterior.jugadores) : initialJugadores.map(j => ({ ...j })));
+      const full = armarEquipoCompleto(raw);
+      setEquipo(full);
+      setCapitanId((tieneActual ? equipoData?.capitan_id : anterior?.capitan_id) ?? undefined);
+      setPateadorId((tieneActual ? equipoData?.pateador_id : anterior?.pateador_id) ?? undefined);
+      await hydrateJugadores(full);
+      return;
+    }
+
+    // Fechas historicas o fecha en juego: mostrar equipo guardado de esa fecha (sin fallback a anterior).
+    setJustSelectedPositions([]);
+    setEquipoAnterior(null);
+    const eq = await getEquipoFecha(uid, viewedFechaId);
+    const raw = eq?.jugadores?.length ? normalizarJugadores(eq.jugadores) : initialJugadores.map(j => ({ ...j }));
+    const full = armarEquipoCompleto(raw);
+    setEquipo(full);
+    setCapitanId(eq?.capitan_id ?? undefined);
+    setPateadorId(eq?.pateador_id ?? undefined);
+    await hydrateJugadores(full);
+  };
 
   const loadData = async () => {
     const uid = user?.id;
@@ -64,67 +145,43 @@ export default function MiEquipoPage() {
     setLoading(true);
     setError(null);
     try {
-      const estado = await withTimeout(getEstadoVentanaFecha(), API_TIMEOUT_MS);
+      const [estado, fechasTodas] = await Promise.all([
+        withTimeout(getEstadoVentanaFecha(), API_TIMEOUT_MS),
+        getFechas(),
+      ]);
+      setFechas(fechasTodas);
+
+      let defaultViewedId: string | null = null;
       if (estado.estado === 'armar_equipo') {
-        setJustSelectedPositions([]);
         setFechaActiva(estado.fecha);
         setFechaEnJuegoNum(null);
-        const fecha = estado.fecha;
-        const [equipoData, fechaAnterior] = await Promise.all([
-          getEquipoFecha(uid, fecha.id),
-          getFechaPorNumero(fecha.numero - 1),
-        ]);
-        let anterior: EquipoFecha | null = null;
-        if (fechaAnterior) {
-          const ea = await getEquipoFecha(uid, fechaAnterior.id);
-          if (ea?.jugadores?.length) anterior = { ...ea, jugadores: normalizarJugadores(ea.jugadores) };
-          else anterior = ea;
-        }
-        setEquipoAnterior(anterior);
-        const tieneActual = equipoData?.jugadores?.length && equipoData.jugadores.some((j: { jugador_id?: string | null }) => j.jugador_id);
-        // Prioridad de carga: equipo actual -> equipo anterior -> vacío.
-        const raw = tieneActual
-          ? normalizarJugadores(equipoData!.jugadores)
-          : (anterior?.jugadores?.length ? normalizarJugadores(anterior.jugadores) : initialJugadores.map(j => ({ ...j })));
-        const byPos = new Map(raw.map(j => [j.posicion, j]));
-        const full: JugadorPosicion[] = [];
-        for (let p = 1; p <= 15; p++) full.push(byPos.get(p) || { posicion: p, jugador_id: '' });
-        setEquipo(full);
-        setCapitanId((tieneActual ? equipoData?.capitan_id : anterior?.capitan_id) ?? undefined);
-        setPateadorId((tieneActual ? equipoData?.pateador_id : anterior?.pateador_id) ?? undefined);
-        const ids = full.map(j => j.jugador_id).filter(Boolean) as string[];
-        if (ids.length > 0) {
-          const data = await getJugadoresByIds(ids);
-          const m: Record<string, Jugador> = {};
-          data.forEach(j => { m[j.id] = j; });
-          setJugadoresData(m);
-        }
+        defaultViewedId = estado.fecha.id;
       } else if (estado.estado === 'fecha_en_juego') {
-        setJustSelectedPositions([]);
         setFechaActiva(null);
         setFechaEnJuegoNum(estado.numero);
         const fej = await getFechaPorNumero(estado.numero);
-        if (fej) {
-          const eq = await getEquipoFecha(uid, fej.id);
-          const raw = eq?.jugadores?.length ? normalizarJugadores(eq.jugadores) : initialJugadores.map(j => ({ ...j }));
-          const byPos = new Map(raw.map(j => [j.posicion, j]));
-          const full: JugadorPosicion[] = [];
-          for (let p = 1; p <= 15; p++) full.push(byPos.get(p) || { posicion: p, jugador_id: '' });
-          setEquipo(full);
-          setCapitanId(eq?.capitan_id ?? undefined);
-          setPateadorId(eq?.pateador_id ?? undefined);
-          const ids = full.map(j => j.jugador_id).filter(Boolean) as string[];
-          if (ids.length > 0) {
-            const data = await getJugadoresByIds(ids);
-            const m: Record<string, Jugador> = {};
-            data.forEach(j => { m[j.id] = j; });
-            setJugadoresData(m);
-          }
-        }
+        defaultViewedId = fej?.id ?? (fechasTodas.length ? fechasTodas[fechasTodas.length - 1].id : null);
       } else {
-        setJustSelectedPositions([]);
         setFechaActiva(null);
         setFechaEnJuegoNum(null);
+        defaultViewedId = fechasTodas.length ? fechasTodas[fechasTodas.length - 1].id : null;
+      }
+      setFechaDefaultId(defaultViewedId);
+
+      const fechaParam = searchParams.get('fecha');
+      const fechaParamValid = fechaParam && fechasTodas.some(f => f.id === fechaParam) ? fechaParam : null;
+
+      const stillValidSelected = fechaVisualizadaId && fechasTodas.some(f => f.id === fechaVisualizadaId);
+      const nextViewedId = fechaParamValid ?? (stillValidSelected ? fechaVisualizadaId : defaultViewedId);
+      setFechaVisualizadaId(nextViewedId);
+      if (nextViewedId) {
+        await loadEquipoVisualizado(uid, nextViewedId);
+      } else {
+        setEquipo(initialJugadores.map(j => ({ ...j })));
+        setEquipoAnterior(null);
+        setCapitanId(undefined);
+        setPateadorId(undefined);
+        setJugadoresData({});
       }
     } catch (e) {
       console.error('Error loading Mi Equipo:', e);
@@ -133,6 +190,26 @@ export default function MiEquipoPage() {
   };
 
   useEffect(() => { loadData(); }, [user?.id]);
+
+  const handleFechaVisualizadaChange = async (fechaId: string) => {
+    const uid = user?.id;
+    const targetFechaId = fechaId || fechaDefaultId;
+    if (!uid || !targetFechaId) return;
+    setSelectedPos(null);
+    setModalCP(null);
+    setLimitModal(null);
+    setLoading(true);
+    setError(null);
+    try {
+      setFechaVisualizadaId(fechaId || null);
+      await loadEquipoVisualizado(uid, targetFechaId);
+    } catch (e) {
+      console.error('Error loading selected fecha:', e);
+      setError(e instanceof Error ? e.message : 'Error al cargar fecha seleccionada.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSelectJugador = async (jugadorId: string) => {
     if (selectedPos === null) return;
@@ -183,7 +260,9 @@ export default function MiEquipoPage() {
   };
 
   const persistEquipo = async (jugadores: JugadorPosicion[], capId?: string, patId?: string) => {
-    if (!user?.id || !fechaActiva?.id) return;
+    const viewedId = fechaVisualizadaId || fechaDefaultId;
+    const canEdit = !!fechaActiva && viewedId === fechaActiva.id && fechaEnJuegoNum == null;
+    if (!canEdit || !user?.id || !fechaActiva?.id) return;
     setSaving(true);
     try { await saveEquipoFecha(user.id, fechaActiva.id, jugadores, capId, patId, equipoAnterior); }
     catch (e) { console.error('Error saving:', e); showToast('No se pudo guardar el equipo.'); }
@@ -195,9 +274,110 @@ export default function MiEquipoPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const calcularAporteJugador = (
+    detalle: PuntajeJugadorDetalle | undefined,
+    esCapitan: boolean,
+    esPateador: boolean
+  ): number => {
+    if (!detalle) return 0;
+    const base = detalle.puntos ?? 0;
+    const bonusCapitan = esCapitan ? base : 0; // Capitán: puntos comunes x2 => bonus extra = base.
+    const bonusPateador = esPateador
+      ? (detalle.conversiones ?? 0) * 2 + (detalle.penales ?? 0) * 3
+      : 0;
+    return base + bonusCapitan + bonusPateador;
+  };
+
+  const handleTogglePuntosUltimaFecha = async () => {
+    if (!canEdit) return;
+    if (!ultimaFecha || !user?.id) return;
+
+    if (showPuntosUltimaFecha) {
+      setShowPuntosUltimaFecha(false);
+      return;
+    }
+
+    if (ultimaFechaLoadedId === ultimaFecha.id) {
+      setShowPuntosUltimaFecha(true);
+      return;
+    }
+
+    setLoadingPuntosUltimaFecha(true);
+    try {
+      const eq = await getEquipoFecha(user.id, ultimaFecha.id);
+      const raw = eq?.jugadores?.length
+        ? normalizarJugadores(eq.jugadores)
+        : initialJugadores.map((j) => ({ ...j }));
+      const full = armarEquipoCompleto(raw);
+
+      setUltimaEquipo(full);
+      setUltimaCapitanId(eq?.capitan_id ?? undefined);
+      setUltimaPateadorId(eq?.pateador_id ?? undefined);
+      const ids = full.map((j) => j.jugador_id).filter(Boolean) as string[];
+
+      if (ids.length > 0) {
+        const dataJugadores = await getJugadoresByIds(ids);
+        const m: Record<string, Jugador> = {};
+        dataJugadores.forEach((j) => {
+          m[j.id] = j;
+        });
+        setJugadoresUltimaData(m);
+        const puntajes = await getPuntajesJugadoresFecha(ultimaFecha.id, ids);
+        setPuntajesUltimaByJugador(puntajes);
+      } else {
+        setJugadoresUltimaData({});
+        setPuntajesUltimaByJugador({});
+      }
+
+      setUltimaFechaLoadedId(ultimaFecha.id);
+      setShowPuntosUltimaFecha(true);
+    } catch (e) {
+      console.error('Error loading puntajes ultima fecha:', e);
+      setJugadoresUltimaData({});
+      setPuntajesUltimaByJugador({});
+      setUltimaEquipo(null);
+      setUltimaCapitanId(undefined);
+      setUltimaPateadorId(undefined);
+      setUltimaFechaLoadedId(ultimaFecha.id);
+      setShowPuntosUltimaFecha(true);
+    } finally {
+      setLoadingPuntosUltimaFecha(false);
+    }
+  };
+
   const jugadoresDelEquipo = useMemo(() => {
     return equipo.filter(j => j.jugador_id && jugadoresData[j.jugador_id]).map(j => jugadoresData[j.jugador_id]);
   }, [equipo, jugadoresData]);
+
+  useEffect(() => {
+    const fechaId = fechaVisualizadaId || fechaDefaultId;
+    const jugadorIds = Array.from(new Set(equipo.map((j) => j.jugador_id).filter(Boolean)));
+    const isFechaEditable = !!fechaActiva && fechaId === fechaActiva.id && fechaEnJuegoNum == null;
+    let cancelled = false;
+
+    const cargarPuntajes = async () => {
+      // Si la fecha es editable (actual), no mostramos ni cargamos puntos todavía.
+      // Los puntajes se consultan solo para fechas ya cerradas / modo lectura.
+      if (isFechaEditable) {
+        if (!cancelled) setPuntajesFechaByJugador({});
+        return;
+      }
+      if (!fechaId || jugadorIds.length === 0) {
+        if (!cancelled) setPuntajesFechaByJugador({});
+        return;
+      }
+      try {
+        const data = await getPuntajesJugadoresFecha(fechaId, jugadorIds);
+        if (!cancelled) setPuntajesFechaByJugador(data);
+      } catch (e) {
+        console.error('Error loading puntajes por jugador:', e);
+        if (!cancelled) setPuntajesFechaByJugador({});
+      }
+    };
+
+    void cargarPuntajes();
+    return () => { cancelled = true; };
+  }, [equipo, fechaVisualizadaId, fechaDefaultId, fechaActiva, fechaEnJuegoNum]);
 
   const changedComparedToPrevious = useMemo(() => {
     if (!equipoAnterior?.jugadores?.length) return [];
@@ -215,8 +395,73 @@ export default function MiEquipoPage() {
     setModalCP(null);
   };
 
-  const readOnly = fechaEnJuegoNum != null;
-  const subtitle = fechaActiva ? `Fecha ${fechaActiva.numero}` : fechaEnJuegoNum != null ? `Fecha ${fechaEnJuegoNum} en juego` : null;
+  const fechaVisualizada = useMemo(
+    () => fechas.find(f => f.id === (fechaVisualizadaId || fechaDefaultId)) || null,
+    [fechas, fechaVisualizadaId, fechaDefaultId]
+  );
+  const effectiveViewedId = fechaVisualizadaId || fechaDefaultId;
+  const canEdit = !!fechaActiva && effectiveViewedId === fechaActiva.id && fechaEnJuegoNum == null;
+  const readOnly = !canEdit;
+  const subtitle = fechaVisualizada ? `Fecha ${fechaVisualizada.numero}` : null;
+  const fechaBaseNumero = fechaActiva?.numero ?? fechaEnJuegoNum ?? Number.MAX_SAFE_INTEGER;
+  const fechasHistorial = useMemo(
+    () => fechas.filter((f) => f.numero < fechaBaseNumero).sort((a, b) => b.numero - a.numero),
+    [fechas, fechaBaseNumero]
+  );
+  const ultimaFecha = useMemo(() => ultimaFechaCompletada(fechas), [fechas]);
+  const puntosByJugadorId = useMemo(() => {
+    const out: Record<string, number> = {};
+    Object.values(puntajesFechaByJugador).forEach((p) => {
+      out[p.jugador_id] = calcularAporteJugador(
+        p,
+        capitanId === p.jugador_id,
+        pateadorId === p.jugador_id
+      );
+    });
+    return out;
+  }, [puntajesFechaByJugador, capitanId, pateadorId]);
+
+  const puntosUltimaByJugadorId = useMemo(() => {
+    const out: Record<string, number> = {};
+    Object.values(puntajesUltimaByJugador).forEach((p) => {
+      out[p.jugador_id] = calcularAporteJugador(
+        p,
+        ultimaCapitanId === p.jugador_id,
+        ultimaPateadorId === p.jugador_id
+      );
+    });
+    return out;
+  }, [puntajesUltimaByJugador, ultimaCapitanId, ultimaPateadorId]);
+
+  const totalUltimaFechaPts = useMemo(() => {
+    return Object.values(puntosUltimaByJugadorId).reduce((s, p) => s + p, 0);
+  }, [puntosUltimaByJugadorId]);
+
+  const selectedDesgloseJugador = selectedDesgloseJugadorId
+    ? desgloseFuente === 'ultimaFecha'
+      ? jugadoresUltimaData[selectedDesgloseJugadorId]
+      : jugadoresData[selectedDesgloseJugadorId]
+    : null;
+  const selectedDesglose = selectedDesgloseJugadorId
+    ? desgloseFuente === 'ultimaFecha'
+      ? puntajesUltimaByJugador[selectedDesgloseJugadorId]
+      : puntajesFechaByJugador[selectedDesgloseJugadorId]
+    : undefined;
+  const selectedEsCapitan = !!selectedDesgloseJugadorId && (
+    desgloseFuente === 'ultimaFecha'
+      ? ultimaCapitanId === selectedDesgloseJugadorId
+      : capitanId === selectedDesgloseJugadorId
+  );
+  const selectedEsPateador = !!selectedDesgloseJugadorId && (
+    desgloseFuente === 'ultimaFecha'
+      ? ultimaPateadorId === selectedDesgloseJugadorId
+      : pateadorId === selectedDesgloseJugadorId
+  );
+  const selectedTotalAporte = calcularAporteJugador(
+    selectedDesglose,
+    selectedEsCapitan,
+    selectedEsPateador
+  );
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><LoadingView message="Cargando equipo..." /></div>;
@@ -238,11 +483,43 @@ export default function MiEquipoPage() {
   return (
     <div className="min-h-screen h-full flex flex-col">
       <div className="max-w-4xl mx-auto flex flex-col flex-1 min-h-0 w-full">
-      <header className="pt-4 pb-2 px-6 text-center shrink-0">
+      <header className="pt-4 pb-2 px-6 shrink-0">
+        {fechasHistorial.length > 0 && (
+          <div className="mb-2 max-w-[260px] flex items-center gap-2">
+            <div className="flex-1">
+              <select
+                id="mi-equipo-fecha"
+                value={fechaVisualizadaId ?? ''}
+                onChange={(e) => void handleFechaVisualizadaChange(e.target.value)}
+                className="w-full rounded-xl bg-bordo-dark border border-white/15 px-3 py-2 text-sm text-white"
+              >
+                <option value="">Ver equipos</option>
+                {fechasHistorial.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {`Fecha ${f.numero}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {fechaVisualizadaId && (
+              <button
+                type="button"
+                onClick={() => void handleFechaVisualizadaChange('')}
+                className="h-10 w-10 rounded-xl border border-white/15 bg-bordo-dark text-white/85 hover:text-white hover:border-white/30 flex items-center justify-center"
+                title="Volver a fecha actual"
+                aria-label="Volver a fecha actual"
+              >
+                <RotateCcw size={16} />
+              </button>
+            )}
+          </div>
+        )}
+        <div className="text-center">
         <h1 className="text-2xl md:text-3xl font-bold text-oro">
-          {fechaActiva ? 'Armá tu equipo' : fechaEnJuegoNum != null ? 'Fecha en juego' : 'Mi Equipo'}
+          {canEdit ? 'Armá tu equipo' : 'Mi Equipo'}
         </h1>
         {subtitle && <p className="text-white/70 text-sm mt-1">{subtitle}</p>}
+        </div>
         {/* Barra Capitán / Pateador como en mobile: mitad oro, mitad azul */}
         {jugadoresDelEquipo.length === 15 && (
           <div className="mt-3 max-w-sm mx-auto">
@@ -281,6 +558,97 @@ export default function MiEquipoPage() {
       </header>
 
       <div className="px-4 pb-6 flex-1 min-h-0 flex flex-col w-full">
+        {canEdit && ultimaFecha && (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => void handleTogglePuntosUltimaFecha()}
+              className="w-full rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/[0.06] transition-colors"
+            >
+              <div className="min-w-0 text-left">
+                <p className="text-sm font-semibold text-white/90 truncate">
+                  Puntos última fecha (Fecha {ultimaFecha.numero})
+                </p>
+                <p className="text-xs text-white/60">
+                  {showPuntosUltimaFecha ? 'Ocultar detalle' : 'Ver jugadores y desglose'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {loadingPuntosUltimaFecha ? (
+                  <Loader2 size={16} className="animate-spin text-oro" />
+                ) : ultimaFechaLoadedId === ultimaFecha.id ? (
+                  <span className="text-sm font-bold text-oro">
+                    {totalUltimaFechaPts} pts
+                  </span>
+                ) : (
+                  <span className="text-sm font-bold text-white/60"> </span>
+                )}
+              </div>
+            </button>
+
+            <AnimatePresence>
+              {showPuntosUltimaFecha && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className="mt-3 rounded-2xl border border-white/10 bg-bordo-dark/30 overflow-hidden"
+                >
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <p className="text-sm font-bold text-oro">
+                      Tus puntos - Fecha {ultimaFecha.numero}
+                    </p>
+                    <p className="text-xs text-white/60">
+                      Click en un jugador para ver el detalle
+                    </p>
+                  </div>
+
+                  <div className="p-3 max-h-[38vh] overflow-y-auto">
+                    {loadingPuntosUltimaFecha ? (
+                      <p className="text-sm text-white/70">Cargando puntajes...</p>
+                    ) : !ultimaEquipo ? (
+                      <p className="text-sm text-white/70">No hay equipo guardado para esta fecha.</p>
+                    ) : Object.keys(puntajesUltimaByJugador).length === 0 ? (
+                      <p className="text-sm text-white/70">
+                        Aun no hay puntajes cargados para la última fecha.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {ultimaEquipo
+                          .filter((j) => j.jugador_id)
+                          .map((j) => {
+                            const jugadorId = j.jugador_id;
+                            const jugador = jugadoresUltimaData[jugadorId];
+                            const puntos = puntosUltimaByJugadorId[jugadorId] ?? 0;
+                            return (
+                              <button
+                                key={jugadorId}
+                                type="button"
+                                onClick={() => {
+                                  setDesgloseFuente('ultimaFecha');
+                                  setSelectedDesgloseJugadorId(jugadorId);
+                                }}
+                                className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.07] transition-colors"
+                              >
+                                <span className="text-sm font-semibold text-white/90 truncate">
+                                  {jugador ? `${jugador.apellido} ${jugador.nombre}` : `#${jugadorId}`}
+                                </span>
+                                <span className="text-sm font-bold text-oro shrink-0">
+                                  {puntos} pts
+                                </span>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -295,6 +663,15 @@ export default function MiEquipoPage() {
               readOnly={readOnly}
               changedComparedToPrevious={changedComparedToPrevious}
               justSelectedPositions={justSelectedPositions}
+              puntosByJugadorId={readOnly ? puntosByJugadorId : {}}
+              onPlayerScoreClick={
+                readOnly
+                  ? (jugadorId) => {
+                    setDesgloseFuente('visualizada');
+                    setSelectedDesgloseJugadorId(jugadorId);
+                  }
+                  : undefined
+              }
               fillOnMobile
             />
           </div>
@@ -337,6 +714,71 @@ export default function MiEquipoPage() {
                 ))}
               </div>
               <button onClick={() => setModalCP(null)}
+                className="w-full py-4 text-oro font-semibold bg-white/10 hover:bg-white/15 transition-colors">
+                Cerrar
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal desglose de puntos */}
+      <AnimatePresence>
+        {selectedDesgloseJugadorId && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={() => setSelectedDesgloseJugadorId(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-bordo-dark rounded-3xl w-full max-w-lg max-h-[85vh] overflow-hidden border border-oro/25">
+              <div className="px-5 py-4 border-b border-white/10">
+                <h2 className="text-oro font-bold text-lg">Desglose de puntaje</h2>
+                {selectedDesgloseJugador && (
+                  <p className="text-sm text-white/90 mt-1">
+                    {selectedDesgloseJugador.apellido} {selectedDesgloseJugador.nombre}
+                    {selectedDesgloseJugador.club?.nombre ? ` · ${selectedDesgloseJugador.club.nombre}` : ''}
+                    {` · ${NOMBRES_POSICIONES[selectedDesgloseJugador.posicion_id] || `Posición ${selectedDesgloseJugador.posicion_id}`}`}
+                  </p>
+                )}
+                <p className="text-sm text-oro/90 mt-1">
+                  Total fecha: <strong>{selectedTotalAporte} pts</strong>
+                </p>
+              </div>
+              <div className="px-5 py-4 space-y-2 max-h-[55vh] overflow-y-auto">
+                {!selectedDesglose ? (
+                  <p className="text-sm text-white/80">Aun no hay puntajes cargados para esta fecha.</p>
+                ) : (
+                  <>
+                    {selectedDesglose.titularidad && <p className="text-sm text-white/90">Titularidad: +5</p>}
+                    {selectedDesglose.victoria && <p className="text-sm text-white/90">Victoria: +2</p>}
+                    {selectedDesglose.victoria_visitante && <p className="text-sm text-white/90">Victoria visitante: +1</p>}
+                    {selectedDesglose.bonus_ofensivo && <p className="text-sm text-white/90">Bonus ofensivo: +1</p>}
+                    {selectedDesglose.bonus_defensivo && <p className="text-sm text-white/90">Bonus defensivo: +1</p>}
+                    {selectedDesglose.tries > 0 && <p className="text-sm text-white/90">Try ({selectedDesglose.tries}): +{selectedDesglose.tries * 5}</p>}
+                    {selectedDesglose.drops > 0 && <p className="text-sm text-white/90">Drop ({selectedDesglose.drops}): +{selectedDesglose.drops * 3}</p>}
+                    {selectedDesglose.amarilla > 0 && <p className="text-sm text-white/90">Amarilla ({selectedDesglose.amarilla}): -{selectedDesglose.amarilla * 2}</p>}
+                    {selectedDesglose.roja > 0 && <p className="text-sm text-white/90">Roja ({selectedDesglose.roja}): -{selectedDesglose.roja * 4}</p>}
+                    {selectedDesglose.figura_partido && <p className="text-sm text-white/90">Figura del partido: +5</p>}
+                    {selectedDesglose.puntos_oro && <p className="text-sm text-white/90">Punto de oro: +5</p>}
+                    {selectedEsCapitan && (
+                      <p className="text-sm text-white/90">
+                        Bonus capitán (x2 puntos comunes): +{selectedDesglose.puntos ?? 0}
+                      </p>
+                    )}
+                    {selectedEsPateador && selectedDesglose.conversiones > 0 && (
+                      <p className="text-sm text-white/90">Conversiones ({selectedDesglose.conversiones}): +{selectedDesglose.conversiones * 2}</p>
+                    )}
+                    {selectedEsPateador && selectedDesglose.penales > 0 && (
+                      <p className="text-sm text-white/90">Penales ({selectedDesglose.penales}): +{selectedDesglose.penales * 3}</p>
+                    )}
+                    <p className="text-xs text-white/70 pt-2 border-t border-white/10">
+                      Nota: conversiones (+2) y penales (+3) aplican al pateador elegido.
+                    </p>
+                  </>
+                )}
+              </div>
+              <button onClick={() => setSelectedDesgloseJugadorId(null)}
                 className="w-full py-4 text-oro font-semibold bg-white/10 hover:bg-white/15 transition-colors">
                 Cerrar
               </button>

@@ -15,8 +15,10 @@ function JerseySlot({
   isPateador,
   highlightCambio,
   spinOnSelect,
+  puntosJugador,
   readOnly,
   onPositionPress,
+  onPlayerScoreClick,
 }: {
   pos: (typeof POSICIONES_RUGBY)[0];
   jugador: Jugador | null;
@@ -26,17 +28,19 @@ function JerseySlot({
   isPateador: boolean;
   highlightCambio: boolean;
   spinOnSelect: boolean;
+  puntosJugador?: number;
   readOnly: boolean;
   onPositionPress: (posicion: number) => void;
+  onPlayerScoreClick?: (jugadorId: string) => void;
 }) {
   const prevSpinRef = useRef(false);
-  const [spin, setSpin] = useState(0);
+  const [spinY, setSpinY] = useState(0);
 
   useEffect(() => {
     if (spinOnSelect && !prevSpinRef.current) {
       prevSpinRef.current = true;
-      // Un solo giro por selección (evita animación de "vuelta atrás").
-      setSpin((prev) => prev + 360);
+      // Giro 3D tipo moneda, hacia la derecha (sentido horario).
+      setSpinY((prev) => prev + 360);
     }
     if (!spinOnSelect) prevSpinRef.current = false;
   }, [spinOnSelect]);
@@ -46,13 +50,13 @@ function JerseySlot({
       type="button"
       onClick={() => !readOnly && onPositionPress(pos.numero)}
       className={`absolute flex flex-col items-center -translate-x-1/2 -translate-y-1/2 z-10 ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
-      style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+      style={{ left: `${pos.x}%`, top: `${pos.y}%`, transformPerspective: 900 }}
       initial={false}
       animate={{
-        rotate: spin,
+        rotateY: spinY,
       }}
       transition={{
-        rotate: { duration: 0.35 },
+        rotateY: { duration: 0.45, ease: 'linear' },
       }}
     >
       <div className="relative w-12 h-12 md:w-14 md:h-14 flex items-center justify-center">
@@ -101,10 +105,32 @@ function JerseySlot({
           </div>
         )}
       </div>
-      <div className="mt-1 px-2 py-0.5 rounded-full bg-azul">
-        <span className="text-[10px] md:text-[11px] text-white font-semibold max-w-[80px] block truncate text-center">
+      <div className="mt-1 px-2 py-1 rounded-full bg-azul flex flex-col items-center gap-0.5 min-w-[84px]">
+        <button
+          type="button"
+          disabled={!jugador || !onPlayerScoreClick}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!jugador || !onPlayerScoreClick) return;
+            onPlayerScoreClick(jugador.id);
+          }}
+          className="text-[10px] md:text-[11px] text-white font-semibold max-w-[80px] block truncate text-center"
+        >
           {jugador ? (jugador.apellido || jugador.nombre) : `#${pos.numero}`}
-        </span>
+        </button>
+        {jugador && puntosJugador != null && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!onPlayerScoreClick) return;
+              onPlayerScoreClick(jugador.id);
+            }}
+            className="text-[10px] text-oro font-bold leading-none"
+          >
+            {puntosJugador} pts
+          </button>
+        )}
       </div>
     </motion.button>
   );
@@ -120,6 +146,8 @@ interface RugbyFieldProps {
   readOnly?: boolean;
   changedComparedToPrevious?: number[];
   justSelectedPositions?: number[];
+  puntosByJugadorId?: Record<string, number>;
+  onPlayerScoreClick?: (jugadorId: string) => void;
   /** En móvil, la cancha ocupa todo el alto disponible (flex-1). En desktop se mantiene aspect ratio. */
   fillOnMobile?: boolean;
 }
@@ -134,6 +162,8 @@ export default function RugbyField({
   readOnly = false,
   changedComparedToPrevious = [],
   justSelectedPositions = [],
+  puntosByJugadorId = {},
+  onPlayerScoreClick,
   fillOnMobile = false,
 }: RugbyFieldProps) {
   return (
@@ -164,6 +194,7 @@ export default function RugbyField({
         const isEmpty = !jugador;
         const highlightCambio = changedComparedToPrevious.includes(pos.numero);
         const spinOnSelect = justSelectedPositions.includes(pos.numero);
+        const puntosJugador = jugador ? puntosByJugadorId[jugador.id] : undefined;
 
         return (
           <JerseySlot
@@ -176,8 +207,10 @@ export default function RugbyField({
             isPateador={!!isPateador}
             highlightCambio={highlightCambio}
             spinOnSelect={spinOnSelect}
+            puntosJugador={puntosJugador}
             readOnly={readOnly}
             onPositionPress={onPositionPress}
+            onPlayerScoreClick={onPlayerScoreClick}
           />
         );
       })}

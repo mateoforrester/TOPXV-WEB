@@ -6,11 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import {
   getRanking, getFechas, getEstadoVentanaFecha, getRankingFecha,
-  getFixture, getEquipoIdeal, ultimaFechaCompletada, proximaFecha,
-  type EquipoIdealJugador, type EstadoVentanaFecha,
+  getFixture, getMejorXVGeneralSlots, ultimaFechaCompletada, proximaFecha,
+  type MejorXVSlot, type EstadoVentanaFecha,
 } from '@/services/api';
 import { RankingUsuario, Fecha, Partido, Club } from '@/types';
-import { NOMBRES_POSICIONES } from '@/utils/constants';
 import { TabScreen } from '@/components/TabScreen';
 import { AnimatedCard } from '@/components/AnimatedCard';
 import { LoadingView } from '@/components/LoadingView';
@@ -73,8 +72,9 @@ export default function InicioPage() {
   const [fechas, setFechas] = useState<Fecha[]>([]);
   const [estadoVentana, setEstadoVentana] = useState<EstadoVentanaFecha | null>(null);
   const [ganadorUltima, setGanadorUltima] = useState<RankingUsuario | null>(null);
+  const [miPtsUltimaFecha, setMiPtsUltimaFecha] = useState<number | null>(null);
   const [fixtureProxima, setFixtureProxima] = useState<Partido[]>([]);
-  const [equipoIdeal, setEquipoIdeal] = useState<EquipoIdealJugador[]>([]);
+  const [mejorXVGeneral, setMejorXVGeneral] = useState<MejorXVSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMejorXV, setShowMejorXV] = useState(false);
@@ -82,7 +82,7 @@ export default function InicioPage() {
   const ultimaFecha = ultimaFechaCompletada(fechas);
   const proxima = proximaFecha(fechas, estadoVentana ?? { estado: 'sin_ventana' });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [usuario?.id]);
 
   const loadData = async () => {
     setLoading(true);
@@ -95,9 +95,19 @@ export default function InicioPage() {
       const ultima = ultimaFechaCompletada(fechasData);
       const prox = proximaFecha(fechasData, estado);
       if (ultima?.id) {
-        const [rf, ei] = await withTimeout(Promise.all([getRankingFecha(ultima.id), getEquipoIdeal(ultima.id)]), 15000);
-        setGanadorUltima(rf[0] ?? null); setEquipoIdeal(ei);
+        const rf = await withTimeout(getRankingFecha(ultima.id), 15000);
+        setGanadorUltima(rf[0] ?? null);
+        if (usuario?.id) {
+          const mi = rf.find(r => r.usuario_id === usuario.id);
+          setMiPtsUltimaFecha(mi?.puntos_fecha ?? null);
+        } else {
+          setMiPtsUltimaFecha(null);
+        }
+      } else {
+        setMiPtsUltimaFecha(null);
       }
+      const mejorXV = await withTimeout(getMejorXVGeneralSlots(), 15000);
+      setMejorXVGeneral(mejorXV);
       if (prox?.id) setFixtureProxima(await withTimeout(getFixture(prox.id), 15000));
     } catch (e) {
       console.error('Error loading home:', e);
@@ -192,7 +202,7 @@ export default function InicioPage() {
           )}
 
           {/* Ultima fecha: ganador + mejor XV */}
-          {(ultimaFecha || ganadorUltima || equipoIdeal.length > 0) && (
+          {(ultimaFecha || ganadorUltima || mejorXVGeneral.length > 0) && (
             <div>
               <h3 className="flex items-center gap-2 text-white/90 font-semibold text-base mb-3">
                 <Trophy size={18} className="text-oro" /> Ultima fecha
@@ -219,14 +229,38 @@ export default function InicioPage() {
                     </div>
                   </AnimatedCard>
                 )}
-                {ultimaFecha && equipoIdeal.length > 0 && (
+                {ultimaFecha && miPtsUltimaFecha != null && (
+                  <AnimatedCard delay={0.22}>
+                    <button
+                      onClick={() => router.push(`/mi-equipo?fecha=${ultimaFecha.id}`)}
+                      className="w-full text-left rounded-3xl border border-white/10 bg-white/[0.06] overflow-hidden shadow-lg hover:bg-white/[0.1] transition-colors"
+                    >
+                      <div className="h-[3px] bg-oro" />
+                      <div className="p-5 flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-bold text-white/90 mb-2">
+                            Tus puntos en Fecha {ultimaFecha.numero}
+                          </h4>
+                          <p className="text-xs text-white/60">Ver detalle</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-sm font-bold text-oro">
+                            {miPtsUltimaFecha} pts
+                          </span>
+                          <ChevronRight size={18} className="text-oro" />
+                        </div>
+                      </div>
+                    </button>
+                  </AnimatedCard>
+                )}
+                {mejorXVGeneral.length > 0 && (
                   <AnimatedCard delay={0.25}>
                     <button onClick={() => setShowMejorXV(true)}
                       className="w-full text-left rounded-3xl border border-white/10 bg-white/[0.06] overflow-hidden shadow-lg hover:bg-white/[0.1] transition-colors">
                       <div className="h-[3px] bg-oro" />
                       <div className="p-5">
                         <h4 className="text-sm font-bold text-white/90 mb-2">Mejor XV</h4>
-                        <p className="text-xs text-white/60">Los 15 con mas puntos por posicion</p>
+                        <p className="text-xs text-white/60">Mejor XV general del torneo</p>
                         <p className="text-sm font-semibold text-oro mt-2">Ver detalle &rarr;</p>
                       </div>
                     </button>
@@ -250,23 +284,38 @@ export default function InicioPage() {
               className="bg-bordo-dark rounded-3xl w-full max-w-lg max-h-[85vh] overflow-hidden border border-oro/25">
               <div className="flex items-center justify-between p-5 border-b border-white/10">
                 <h2 className="text-xl font-bold text-oro">
-                  Mejor XV {ultimaFecha ? `Fecha ${ultimaFecha.numero}` : ''}
+                  Mejor XV general
                 </h2>
                 <button onClick={() => setShowMejorXV(false)} className="text-white/80 hover:text-white">
                   <X size={24} />
                 </button>
               </div>
               <div className="overflow-y-auto max-h-[70vh] p-5 space-y-0">
-                {equipoIdeal.map(j => (
-                  <div key={j.id} className="flex items-center py-3 border-b border-white/[0.06]">
-                    <div className="w-7 h-7 rounded-lg bg-azul flex items-center justify-center mr-3">
-                      <span className="text-xs font-bold text-white">{j.posicion_id}</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-white/90">{j.apellido}, {j.nombre}</p>
-                      <p className="text-xs text-white/50 mt-0.5">{NOMBRES_POSICIONES[j.posicion_id]}</p>
-                    </div>
-                    <span className="text-sm font-bold text-oro">{j.puntos} pts</span>
+                {mejorXVGeneral.length === 0 && (
+                  <p className="text-sm text-white/60 italic">Todavia no hay datos para calcular el Mejor XV general.</p>
+                )}
+                {mejorXVGeneral.map((slot) => (
+                  <div key={slot.slot_numero} className="py-3 border-b border-white/[0.06]">
+                    <p className="text-xs font-bold text-oro mb-2">
+                      {slot.slot_numero} - {slot.slot_nombre}
+                    </p>
+                    {slot.jugadores.length === 0 ? (
+                      <p className="text-xs text-white/45 italic">Sin datos</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {slot.jugadores.map((j) => (
+                          <div key={`${slot.slot_numero}-${j.jugador_id}`} className="flex items-center">
+                            <div className="w-8 h-8 rounded-lg overflow-hidden mr-3 shrink-0">
+                              <ClubLogo club={{ id: j.club_id, nombre: j.club_nombre, logo_url: j.club_logo_url }} size={32} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-white/90">{j.apellido}, {j.nombre}</p>
+                            </div>
+                            <span className="text-sm font-bold text-oro">{j.puntos_totales} pts</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

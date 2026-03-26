@@ -254,6 +254,61 @@ export async function getPuntajesPorFecha(fechaId: string): Promise<PuntajeJugad
   return data || [];
 }
 
+export type PuntajeJugadorDetalle = {
+  jugador_id: string;
+  puntos: number;
+  titularidad: boolean;
+  victoria: boolean;
+  victoria_visitante: boolean;
+  bonus_ofensivo: boolean;
+  bonus_defensivo: boolean;
+  tries: number;
+  drops: number;
+  amarilla: number;
+  roja: number;
+  figura_partido: boolean;
+  puntos_oro: boolean;
+  conversiones: number;
+  penales: number;
+};
+
+export async function getPuntajesJugadoresFecha(
+  fechaId: string,
+  jugadorIds: string[]
+): Promise<Record<string, PuntajeJugadorDetalle>> {
+  if (!fechaId || jugadorIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('puntajes_jugador')
+    .select(
+      'jugador_id,puntos,titularidad,victoria,victoria_visitante,bonus_ofensivo,bonus_defensivo,tries,drops,amarilla,roja,figura_partido,puntos_oro,conversiones,penales'
+    )
+    .eq('fecha_id', fechaId)
+    .in('jugador_id', jugadorIds);
+  if (error) throw error;
+
+  const out: Record<string, PuntajeJugadorDetalle> = {};
+  (data || []).forEach((row) => {
+    out[row.jugador_id] = {
+      jugador_id: row.jugador_id,
+      puntos: row.puntos ?? 0,
+      titularidad: !!row.titularidad,
+      victoria: !!row.victoria,
+      victoria_visitante: !!row.victoria_visitante,
+      bonus_ofensivo: !!row.bonus_ofensivo,
+      bonus_defensivo: !!row.bonus_defensivo,
+      tries: row.tries ?? 0,
+      drops: row.drops ?? 0,
+      amarilla: row.amarilla ?? 0,
+      roja: row.roja ?? 0,
+      figura_partido: !!row.figura_partido,
+      puntos_oro: !!row.puntos_oro,
+      conversiones: row.conversiones ?? 0,
+      penales: row.penales ?? 0,
+    };
+  });
+  return out;
+}
+
 export async function getRanking(fechaId?: string): Promise<RankingUsuario[]> {
   if (fechaId) {
     const { data, error } = await supabase.rpc('get_ranking_fecha', { fecha_id: fechaId });
@@ -378,10 +433,130 @@ export interface EquipoIdealJugador {
   activo: boolean; puntos: number;
 }
 
+export interface MejorXVGeneralJugador {
+  jugador_id: string;
+  nombre: string;
+  apellido: string;
+  club_id: string;
+  club_nombre: string;
+  club_logo_url?: string;
+  categoria_posicion:
+    | 'Pilar'
+    | 'Hooker'
+    | 'Segunda linea'
+    | 'Tercera linea'
+    | 'Medio scrum'
+    | 'Apertura'
+    | 'Centro'
+    | 'Wing'
+    | 'Fullback';
+  puntos_totales: number;
+}
+
+export interface MejorXVSlotJugador {
+  jugador_id: string;
+  nombre: string;
+  apellido: string;
+  club_id: string;
+  club_nombre: string;
+  club_logo_url?: string;
+  puntos_totales: number;
+}
+
+export interface MejorXVSlot {
+  slot_numero: number;
+  slot_nombre:
+    | 'Pilar'
+    | 'Hooker'
+    | 'Segunda linea'
+    | 'Tercera linea'
+    | 'Medio scrum'
+    | 'Apertura'
+    | 'Centro'
+    | 'Wing'
+    | 'Fullback';
+  jugadores: MejorXVSlotJugador[];
+}
+
 export async function getEquipoIdeal(fechaId?: string): Promise<EquipoIdealJugador[]> {
   const { data, error } = await supabase.rpc('get_equipo_ideal', fechaId ? { fecha_id_param: fechaId } : {});
   if (error) throw error;
   return (data || []) as EquipoIdealJugador[];
+}
+
+export async function getMejorXVGeneralTorneo(): Promise<MejorXVGeneralJugador[]> {
+  const { data, error } = await supabase.rpc('get_mejor_xv_general_torneo');
+  if (!error) return (data || []) as MejorXVGeneralJugador[];
+
+  // Fallback temporal: si el RPC nuevo no existe en el proyecto, evitamos romper Home.
+  // Esto mantiene la UI funcional mientras se aplica la migración SQL en Supabase.
+  if (error.code === 'PGRST202') {
+    const ideal = await getEquipoIdeal();
+    const mapCategoria = (posicionId: number): MejorXVGeneralJugador['categoria_posicion'] => {
+      if (posicionId === 2) return 'Hooker';
+      if (posicionId === 9) return 'Medio scrum';
+      if (posicionId === 10) return 'Apertura';
+      if (posicionId === 15) return 'Fullback';
+      if (posicionId === 1 || posicionId === 3) return 'Pilar';
+      if (posicionId === 4 || posicionId === 5) return 'Segunda linea';
+      if (posicionId === 6 || posicionId === 7 || posicionId === 8) return 'Tercera linea';
+      if (posicionId === 12 || posicionId === 13) return 'Centro';
+      return 'Wing';
+    };
+
+    return ideal.map((j) => ({
+      jugador_id: j.id,
+      nombre: j.nombre,
+      apellido: j.apellido,
+      club_id: j.club_id,
+      club_nombre: 'Club',
+      club_logo_url: undefined,
+      categoria_posicion: mapCategoria(j.posicion_id),
+      puntos_totales: j.puntos,
+    }));
+  }
+
+  throw error;
+}
+
+function slotNombrePorPosicion(posicionId: number): MejorXVSlot['slot_nombre'] {
+  if (posicionId === 2) return 'Hooker';
+  if (posicionId === 9) return 'Medio scrum';
+  if (posicionId === 10) return 'Apertura';
+  if (posicionId === 15) return 'Fullback';
+  if (posicionId === 1 || posicionId === 3) return 'Pilar';
+  if (posicionId === 4 || posicionId === 5) return 'Segunda linea';
+  if (posicionId === 6 || posicionId === 7 || posicionId === 8) return 'Tercera linea';
+  if (posicionId === 12 || posicionId === 13) return 'Centro';
+  return 'Wing';
+}
+
+export async function getMejorXVGeneralSlots(): Promise<MejorXVSlot[]> {
+  const { data, error } = await supabase.rpc('get_mejor_xv_general_slots');
+  if (!error) {
+    return ((data || []) as Array<{ slot_numero: number; slot_nombre: MejorXVSlot['slot_nombre']; jugadores: MejorXVSlotJugador[] }>).map((row) => ({
+      slot_numero: row.slot_numero,
+      slot_nombre: row.slot_nombre,
+      jugadores: Array.isArray(row.jugadores) ? row.jugadores : [],
+    }));
+  }
+
+  // Fallback defensivo para entornos donde aun no se aplico la migracion.
+  if (error.code === 'PGRST202') {
+    const slotMap = new Map<number, MejorXVSlotJugador[]>();
+    for (let i = 1; i <= 15; i++) slotMap.set(i, []);
+    const rows: MejorXVSlot[] = [];
+    for (let slot = 1; slot <= 15; slot++) {
+      rows.push({
+        slot_numero: slot,
+        slot_nombre: slotNombrePorPosicion(slot),
+        jugadores: slotMap.get(slot) || [],
+      });
+    }
+    return rows;
+  }
+
+  throw error;
 }
 
 export async function getRankingFecha(fechaId: string): Promise<RankingUsuario[]> {
