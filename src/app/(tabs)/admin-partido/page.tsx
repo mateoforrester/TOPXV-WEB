@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams, redirect } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -12,12 +12,19 @@ import { TabScreen } from '@/components/TabScreen';
 import { LoadingView } from '@/components/LoadingView';
 import { AnimatedCard } from '@/components/AnimatedCard';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import {
+  bonusDefensivoEquipo,
+  bonusOfensivoEquipo,
+  normalizarPuntoOro,
+  PUNTOS_TRY_PENAL,
+  sumarTriesPorClub,
+} from '@/utils/rugbyPuntajes';
 
 type PuntajeForm = {
   jugador_id: string; nombre: string; apellido: string; club_id: string;
   titularidad: boolean; tries: number; conversiones: number;
   penales: number; drops: number; amarilla: number; roja: number;
-  figura_partido: boolean; puntos_oro: number;
+  figura_partido: boolean; puntos_oro: boolean;
 };
 
 function numVal(s: string): number {
@@ -62,8 +69,8 @@ export default function AdminPartidoPage() {
   const [players, setPlayers] = useState<PuntajeForm[]>([]);
   const [puntosLocal, setPuntosLocal] = useState('');
   const [puntosVisitante, setPuntosVisitante] = useState('');
-  const [bonusLocal, setBonusLocal] = useState(false);
-  const [bonusVisitante, setBonusVisitante] = useState(false);
+  const [tryPenalLocal, setTryPenalLocal] = useState('');
+  const [tryPenalVisitante, setTryPenalVisitante] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -81,6 +88,8 @@ export default function AdminPartidoPage() {
         setPartido(p);
         setPuntosLocal(p.puntos_local != null ? String(p.puntos_local) : '');
         setPuntosVisitante(p.puntos_visitante != null ? String(p.puntos_visitante) : '');
+        setTryPenalLocal(String(p.try_penal_local ?? 0));
+        setTryPenalVisitante(String(p.try_penal_visitante ?? 0));
 
         const jugadores = await getJugadores({ club_ids: [p.club_local_id, p.club_visitante_id], activo: true });
         const puntajes = await getPuntajesPorFecha(p.fecha_id);
@@ -94,23 +103,13 @@ export default function AdminPartidoPage() {
             titularidad: ex?.titularidad ?? false, tries: ex?.tries ?? 0,
             conversiones: ex?.conversiones ?? 0, penales: ex?.penales ?? 0, drops: ex?.drops ?? 0,
             amarilla: ex?.amarilla ?? 0, roja: ex?.roja ?? 0,
-            figura_partido: ex?.figura_partido ?? false, puntos_oro: ex?.puntos_oro ?? 0,
+            figura_partido: ex?.figura_partido ?? false,
+            puntos_oro: normalizarPuntoOro(ex?.puntos_oro),
           };
-        });
-
-        const anyLocalBonus = puntajes.some(pt => {
-          const j = jugadores.find(x => x.id === pt.jugador_id);
-          return j?.club_id === p.club_local_id && (pt as any).victoria_bonus;
-        });
-        const anyVisitBonus = puntajes.some(pt => {
-          const j = jugadores.find(x => x.id === pt.jugador_id);
-          return j?.club_id === p.club_visitante_id && (pt as any).victoria_bonus;
         });
 
         if (!cancelled) {
           setPlayers(forms);
-          setBonusLocal(anyLocalBonus);
-          setBonusVisitante(anyVisitBonus);
         }
       } catch (e) { console.error(e); }
       finally { if (!cancelled) setLoading(false); }
@@ -129,34 +128,80 @@ export default function AdminPartidoPage() {
     if (!partido) return;
     const pl = numVal(puntosLocal);
     const pv = numVal(puntosVisitante);
+    const tpL = numVal(tryPenalLocal);
+    const tpV = numVal(tryPenalVisitante);
     const hasResult = puntosLocal.trim() !== '' && puntosVisitante.trim() !== '';
 
+    const sumLocal = players.filter(p => p.club_id === partido.club_local_id).reduce((s, p) => s + puntosAnotados(p), 0);
+    const sumVisit = players.filter(p => p.club_id === partido.club_visitante_id).reduce((s, p) => s + puntosAnotados(p), 0);
+    const espLocal = sumLocal + tpL * PUNTOS_TRY_PENAL;
+    const espVisit = sumVisit + tpV * PUNTOS_TRY_PENAL;
+
     if (hasResult) {
-      const sumLocal = players.filter(p => p.club_id === partido.club_local_id).reduce((s, p) => s + puntosAnotados(p), 0);
-      const sumVisit = players.filter(p => p.club_id === partido.club_visitante_id).reduce((s, p) => s + puntosAnotados(p), 0);
-      if (sumLocal !== pl || sumVisit !== pv) {
-        alert(`La suma de puntos no coincide con el resultado.\n\n${partido.club_local?.nombre ?? 'Local'}: jugadores=${sumLocal}, resultado=${pl}\n${partido.club_visitante?.nombre ?? 'Visitante'}: jugadores=${sumVisit}, resultado=${pv}`);
+      if (espLocal !== pl || espVisit !== pv) {
+        alert(
+          `Jugadores + try penal (7 c/u) debe igualar el marcador.\n\n${partido.club_local?.nombre ?? 'Local'}: ${sumLocal} + ${tpL}×7 = ${espLocal}, resultado = ${pl}\n${partido.club_visitante?.nombre ?? 'Visitante'}: ${sumVisit} + ${tpV}×7 = ${espVisit}, resultado = ${pv}`
+        );
         return;
       }
     }
 
     setSaving(true);
     try {
-      if (hasResult) await updatePartidoResult(partido.id, pl, pv);
+      const advertenciaFixture = await updatePartidoResult(partido.id, {
+        try_penal_local: tpL,
+        try_penal_visitante: tpV,
+        actualizarMarcador: hasResult,
+        puntos_local: pl,
+        puntos_visitante: pv,
+      });
       const localWins = hasResult && pl > pv;
       const visitWins = hasResult && pv > pl;
+      const boLocal = bonusOfensivoEquipo(sumarTriesPorClub(players, partido.club_local_id) + tpL);
+      const boVisit = bonusOfensivoEquipo(sumarTriesPorClub(players, partido.club_visitante_id) + tpV);
+      const bdLocal = bonusDefensivoEquipo(
+        partido.club_local_id,
+        partido.club_local_id,
+        partido.club_visitante_id,
+        pl,
+        pv,
+        hasResult
+      );
+      const bdVisit = bonusDefensivoEquipo(
+        partido.club_visitante_id,
+        partido.club_local_id,
+        partido.club_visitante_id,
+        pl,
+        pv,
+        hasResult
+      );
       const rows = players.map(p => {
         const isLocal = p.club_id === partido.club_local_id;
+        const victoria = isLocal ? localWins : visitWins;
         return {
-          jugador_id: p.jugador_id, fecha_id: partido.fecha_id, titularidad: p.titularidad,
-          victoria: isLocal ? localWins : visitWins,
-          victoria_bonus: (isLocal && bonusLocal) || (!isLocal && bonusVisitante),
-          tries: p.tries, conversiones: p.conversiones, penales: p.penales, drops: p.drops,
-          amarilla: p.amarilla, roja: p.roja, figura_partido: p.figura_partido, puntos_oro: p.puntos_oro,
+          jugador_id: p.jugador_id,
+          fecha_id: partido.fecha_id,
+          titularidad: p.titularidad,
+          victoria,
+          victoria_visitante: hasResult && visitWins && !isLocal,
+          bonus_ofensivo: isLocal ? boLocal : boVisit,
+          bonus_defensivo: isLocal ? bdLocal : bdVisit,
+          tries: p.tries,
+          conversiones: p.conversiones,
+          penales: p.penales,
+          drops: p.drops,
+          amarilla: p.amarilla,
+          roja: p.roja,
+          figura_partido: p.figura_partido,
+          puntos_oro: p.puntos_oro,
         };
       });
       await upsertPuntajesJugador(rows);
-      alert('Puntajes guardados correctamente.');
+      if (advertenciaFixture) {
+        alert(`Puntajes guardados.\n\n${advertenciaFixture}`);
+      } else {
+        alert('Puntajes guardados correctamente.');
+      }
       router.back();
     } catch (e) { console.error(e); alert('Error al guardar puntajes.'); }
     finally { setSaving(false); }
@@ -175,13 +220,39 @@ export default function AdminPartidoPage() {
 
   const localNombre = partido.club_local?.nombre ?? 'Local';
   const visitNombre = partido.club_visitante?.nombre ?? 'Visitante';
-  const sumaLocal = players.filter(p => p.club_id === partido.club_local_id).reduce((s, p) => s + puntosAnotados(p), 0);
-  const sumaVisit = players.filter(p => p.club_id === partido.club_visitante_id).reduce((s, p) => s + puntosAnotados(p), 0);
   const plNum = numVal(puntosLocal);
   const pvNum = numVal(puntosVisitante);
+  const tpLNum = numVal(tryPenalLocal);
+  const tpVNum = numVal(tryPenalVisitante);
   const resultadoCargado = puntosLocal.trim() !== '' && puntosVisitante.trim() !== '';
-  const localOk = !resultadoCargado || sumaLocal === plNum;
-  const visitOk = !resultadoCargado || sumaVisit === pvNum;
+
+  const sumaLocal = players.filter(p => p.club_id === partido.club_local_id).reduce((s, p) => s + puntosAnotados(p), 0);
+  const sumaVisit = players.filter(p => p.club_id === partido.club_visitante_id).reduce((s, p) => s + puntosAnotados(p), 0);
+  const totalEspLocal = sumaLocal + tpLNum * PUNTOS_TRY_PENAL;
+  const totalEspVisit = sumaVisit + tpVNum * PUNTOS_TRY_PENAL;
+  const localOk = !resultadoCargado || totalEspLocal === plNum;
+  const visitOk = !resultadoCargado || totalEspVisit === pvNum;
+
+  const triesJugL = sumarTriesPorClub(players, partido.club_local_id);
+  const triesJugV = sumarTriesPorClub(players, partido.club_visitante_id);
+  const bonusOfL = bonusOfensivoEquipo(triesJugL + tpLNum);
+  const bonusOfV = bonusOfensivoEquipo(triesJugV + tpVNum);
+  const bonusDefL = bonusDefensivoEquipo(
+    partido.club_local_id,
+    partido.club_local_id,
+    partido.club_visitante_id,
+    plNum,
+    pvNum,
+    resultadoCargado
+  );
+  const bonusDefV = bonusDefensivoEquipo(
+    partido.club_visitante_id,
+    partido.club_local_id,
+    partido.club_visitante_id,
+    plNum,
+    pvNum,
+    resultadoCargado
+  );
 
   const q = search.trim().toLowerCase();
   const filtrados = q
@@ -216,13 +287,39 @@ export default function AdminPartidoPage() {
                   className="w-full px-3 py-2 rounded-xl border border-oro/30 bg-white/[0.08] text-white text-center focus:outline-none focus:ring-1 focus:ring-oro" />
               </div>
             </div>
+            <p className="text-xs text-white/65 mt-3 mb-1">Try penal (7 pts por marca, equipo — sin jugador)</p>
+            <div className="flex items-end gap-4">
+              <div className="flex-1">
+                <label className="text-xs text-white/70 mb-1 block">{localNombre}</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={tryPenalLocal}
+                  onChange={e => setTryPenalLocal(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-oro/30 bg-white/[0.08] text-white text-center focus:outline-none focus:ring-1 focus:ring-oro"
+                />
+              </div>
+              <span className="text-xl text-white/50 pb-2">-</span>
+              <div className="flex-1">
+                <label className="text-xs text-white/70 mb-1 block">{visitNombre}</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={tryPenalVisitante}
+                  onChange={e => setTryPenalVisitante(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-oro/30 bg-white/[0.08] text-white text-center focus:outline-none focus:ring-1 focus:ring-oro"
+                />
+              </div>
+            </div>
             {resultadoCargado && (
               <div className="mt-3 space-y-1">
                 <p className={`text-xs ${localOk ? 'text-white/60' : 'text-red-400 font-semibold'}`}>
-                  Suma {localNombre}: {sumaLocal}{localOk ? ' ✓' : ` (resultado: ${plNum})`}
+                  {localNombre}: {sumaLocal} jug. + {tpLNum}×{PUNTOS_TRY_PENAL} try penal = {totalEspLocal}
+                  {localOk ? ' ✓' : ` (marcador: ${plNum})`}
                 </p>
                 <p className={`text-xs ${visitOk ? 'text-white/60' : 'text-red-400 font-semibold'}`}>
-                  Suma {visitNombre}: {sumaVisit}{visitOk ? ' ✓' : ` (resultado: ${pvNum})`}
+                  {visitNombre}: {sumaVisit} jug. + {tpVNum}×{PUNTOS_TRY_PENAL} try penal = {totalEspVisit}
+                  {visitOk ? ' ✓' : ` (marcador: ${pvNum})`}
                 </p>
               </div>
             )}
@@ -231,17 +328,16 @@ export default function AdminPartidoPage() {
 
         <AnimatedCard delay={0.05}>
           <div className="rounded-2xl border border-oro/20 bg-white/[0.06] p-5">
-            <h3 className="text-sm font-bold text-oro mb-3">Bonus por equipo (titulares)</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-white/90">{localNombre}</span>
-                <Toggle label="" checked={bonusLocal} onChange={setBonusLocal} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-white/90">{visitNombre}</span>
-                <Toggle label="" checked={bonusVisitante} onChange={setBonusVisitante} />
-              </div>
-            </div>
+            <h3 className="text-sm font-bold text-oro mb-3">Bonus tabla (WR, derivado del marcador y tries)</h3>
+            <p className="text-xs text-white/60 mb-2">
+              Ofensivo: 4+ tries del equipo (jugadores + try penal). Defensivo: pierde por 1–7.
+            </p>
+            <p className="text-sm text-white/90">
+              {localNombre}: tries {triesJugL} jug. + {tpLNum} try penal · Ofensivo {bonusOfL ? 'sí' : 'no'} · Defensivo {bonusDefL ? 'sí' : 'no'}
+            </p>
+            <p className="text-sm text-white/90 mt-2">
+              {visitNombre}: tries {triesJugV} jug. + {tpVNum} try penal · Ofensivo {bonusOfV ? 'sí' : 'no'} · Defensivo {bonusDefV ? 'sí' : 'no'}
+            </p>
           </div>
         </AnimatedCard>
 
@@ -262,6 +358,7 @@ export default function AdminPartidoPage() {
                   <div className="flex flex-wrap gap-4 mb-3">
                     <Toggle label="Titular" checked={p.titularidad} onChange={v => updatePlayer(p.jugador_id, 'titularidad', v)} />
                     <Toggle label="Figura" checked={p.figura_partido} onChange={v => updatePlayer(p.jugador_id, 'figura_partido', v)} />
+                    <Toggle label="Oro (+5)" checked={p.puntos_oro} onChange={v => updatePlayer(p.jugador_id, 'puntos_oro', v)} />
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <NumInput label="Tries" value={p.tries} onChange={v => updatePlayer(p.jugador_id, 'tries', v)} />
@@ -270,7 +367,6 @@ export default function AdminPartidoPage() {
                     <NumInput label="Drops" value={p.drops} onChange={v => updatePlayer(p.jugador_id, 'drops', v)} />
                     <NumInput label="Amarilla" value={p.amarilla} onChange={v => updatePlayer(p.jugador_id, 'amarilla', v)} />
                     <NumInput label="Roja" value={p.roja} onChange={v => updatePlayer(p.jugador_id, 'roja', v)} />
-                    <NumInput label="Oro" value={p.puntos_oro} onChange={v => updatePlayer(p.jugador_id, 'puntos_oro', v)} />
                   </div>
                 </div>
               </AnimatedCard>

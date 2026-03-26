@@ -348,14 +348,27 @@ export async function updatePartidoResult(
 
 export async function upsertPuntajesJugador(
   rows: Array<{
-    jugador_id: string; fecha_id: string; titularidad?: boolean;
-    victoria?: boolean; victoria_bonus?: boolean; tries?: number;
-    conversiones?: number; penales?: number; drops?: number;
-    amarilla?: number; roja?: number; figura_partido?: boolean; puntos_oro?: number;
+    jugador_id: string;
+    fecha_id: string;
+    titularidad?: boolean;
+    victoria?: boolean;
+    victoria_visitante?: boolean;
+    bonus_ofensivo?: boolean;
+    bonus_defensivo?: boolean;
+    tries?: number;
+    conversiones?: number;
+    penales?: number;
+    drops?: number;
+    amarilla?: number;
+    roja?: number;
+    figura_partido?: boolean;
+    puntos_oro?: boolean;
   }>
 ): Promise<void> {
   if (rows.length === 0) return;
-  const { error } = await supabase.from('puntajes_jugador').upsert(rows, { onConflict: 'jugador_id,fecha_id' });
+  const { error } = await supabase
+    .from('puntajes_jugador')
+    .upsert(rows, { onConflict: 'jugador_id,fecha_id' });
   if (error) throw error;
 }
 
