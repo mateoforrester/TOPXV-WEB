@@ -9,6 +9,8 @@ import { LoadingView } from '@/components/LoadingView';
 import { ChevronDown } from 'lucide-react';
 import { withTimeout } from '@/utils/withTimeout';
 
+const FIXTURE_LAST_UPDATE_KEY = 'fixture_last_update_at';
+
 function formatFecha(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString('es-AR', {
@@ -115,6 +117,32 @@ export default function FixturePage() {
   useEffect(() => {
     if (!fechaSel) { setPartidos([]); setLoading(false); return; }
     loadPartidos();
+  }, [fechaSel?.id]);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== FIXTURE_LAST_UPDATE_KEY) return;
+      if (!fechaSel?.id) return;
+      loadPartidos();
+    };
+    const onFocus = () => {
+      if (!fechaSel?.id) return;
+      loadPartidos();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!fechaSel?.id) return;
+      loadPartidos();
+    };
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fechaSel?.id]);
 
   const FechaPicker = (

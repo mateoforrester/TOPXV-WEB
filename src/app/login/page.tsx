@@ -75,7 +75,7 @@ export default function LoginPage() {
           club_id: clubId,
           nombre_equipo: nombreEquipo || undefined,
         });
-        setSuccess('Cuenta creada. Revisa tu email para confirmar.');
+        setSuccess('Cuenta creada correctamente. Ya podés iniciar sesión.');
         setMode('login');
       }
     } catch (err: unknown) {

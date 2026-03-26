@@ -26,6 +26,7 @@ type PuntajeForm = {
   penales: number; drops: number; amarilla: number; roja: number;
   figura_partido: boolean; puntos_oro: boolean;
 };
+const FIXTURE_LAST_UPDATE_KEY = 'fixture_last_update_at';
 
 function numVal(s: string): number {
   const n = parseInt(s, 10);
@@ -197,6 +198,7 @@ export default function AdminPartidoPage() {
         };
       });
       await upsertPuntajesJugador(rows);
+      window.localStorage.setItem(FIXTURE_LAST_UPDATE_KEY, String(Date.now()));
       if (advertenciaFixture) {
         alert(`Puntajes guardados.\n\n${advertenciaFixture}`);
       } else {

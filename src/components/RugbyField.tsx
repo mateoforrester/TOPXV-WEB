@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { POSICIONES_RUGBY } from '@/utils/constants';
-import { JugadorPosicion, Jugador, EquipoFecha } from '@/types';
+import { JugadorPosicion, Jugador } from '@/types';
 
 function JerseySlot({
   pos,
@@ -13,7 +13,8 @@ function JerseySlot({
   isSelected,
   isCapitan,
   isPateador,
-  isCambio,
+  highlightCambio,
+  spinOnSelect,
   readOnly,
   onPositionPress,
 }: {
@@ -23,22 +24,22 @@ function JerseySlot({
   isSelected: boolean;
   isCapitan: boolean;
   isPateador: boolean;
-  isCambio: boolean;
+  highlightCambio: boolean;
+  spinOnSelect: boolean;
   readOnly: boolean;
   onPositionPress: (posicion: number) => void;
 }) {
-  const prevCambioRef = useRef(false);
+  const prevSpinRef = useRef(false);
   const [spin, setSpin] = useState(0);
 
   useEffect(() => {
-    if (isCambio && !prevCambioRef.current) {
-      prevCambioRef.current = true;
-      setSpin(360);
-      const t = setTimeout(() => { setSpin(0); }, 400);
-      return () => clearTimeout(t);
+    if (spinOnSelect && !prevSpinRef.current) {
+      prevSpinRef.current = true;
+      // Un solo giro por selección (evita animación de "vuelta atrás").
+      setSpin((prev) => prev + 360);
     }
-    if (!isCambio) prevCambioRef.current = false;
-  }, [isCambio]);
+    if (!spinOnSelect) prevSpinRef.current = false;
+  }, [spinOnSelect]);
 
   return (
     <motion.button
@@ -48,15 +49,11 @@ function JerseySlot({
       style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
       initial={false}
       animate={{
-        scale: isSelected ? 1.1 : 1,
         rotate: spin,
       }}
       transition={{
-        scale: { type: 'spring', stiffness: 300, damping: 20 },
         rotate: { duration: 0.35 },
       }}
-      whileHover={readOnly ? undefined : { scale: (isSelected ? 1.1 : 1) * 1.08 }}
-      whileTap={readOnly ? undefined : { scale: 0.95 }}
     >
       <div className="relative w-12 h-12 md:w-14 md:h-14 flex items-center justify-center">
         <div className="absolute inset-0 flex items-center justify-center">
@@ -65,13 +62,28 @@ function JerseySlot({
             alt={`Posicion ${pos.numero}`}
             fill
             sizes="56px"
-            className={`object-contain ${isEmpty ? 'opacity-50 grayscale drop-shadow-lg' : 'opacity-100 drop-shadow-lg'}`}
+            className={`object-contain ${
+              isEmpty ? 'opacity-50 grayscale drop-shadow-lg' : 'opacity-100 drop-shadow-lg'
+            } ${
+              highlightCambio
+                ? 'sepia saturate-[8] hue-rotate-[345deg] brightness-125 contrast-120'
+                : ''
+            }`}
           />
-          {isCambio && (
-            <div
-              className="absolute inset-0 rounded-full bg-amber-400/80 pointer-events-none"
-              style={{ mixBlendMode: 'color' }}
+          {highlightCambio && (
+            <Image
+              src="/camiseta.png"
+              alt=""
+              fill
+              sizes="56px"
               aria-hidden
+              className="object-contain pointer-events-none"
+              style={{
+                opacity: 0.9,
+                mixBlendMode: 'multiply',
+                filter:
+                  'brightness(0) saturate(100%) invert(78%) sepia(79%) saturate(995%) hue-rotate(359deg) brightness(103%) contrast(105%)',
+              }}
             />
           )}
         </div>
@@ -106,7 +118,8 @@ interface RugbyFieldProps {
   capitanId?: string;
   pateadorId?: string;
   readOnly?: boolean;
-  equipoAnterior?: EquipoFecha | null;
+  changedComparedToPrevious?: number[];
+  justSelectedPositions?: number[];
   /** En móvil, la cancha ocupa todo el alto disponible (flex-1). En desktop se mantiene aspect ratio. */
   fillOnMobile?: boolean;
 }
@@ -119,7 +132,8 @@ export default function RugbyField({
   capitanId,
   pateadorId,
   readOnly = false,
-  equipoAnterior = null,
+  changedComparedToPrevious = [],
+  justSelectedPositions = [],
   fillOnMobile = false,
 }: RugbyFieldProps) {
   return (
@@ -148,11 +162,8 @@ export default function RugbyField({
         const isCapitan = jugador && capitanId === jugador.id;
         const isPateador = jugador && pateadorId === jugador.id;
         const isEmpty = !jugador;
-        const tieneEquipoAnterior = !!(equipoAnterior?.jugadores && equipoAnterior.jugadores.length > 0);
-        const anteriorId = tieneEquipoAnterior
-          ? equipoAnterior!.jugadores.find((j) => j.posicion === pos.numero)?.jugador_id
-          : null;
-        const isCambio = !!(tieneEquipoAnterior && jugador && anteriorId !== jugador.id);
+        const highlightCambio = changedComparedToPrevious.includes(pos.numero);
+        const spinOnSelect = justSelectedPositions.includes(pos.numero);
 
         return (
           <JerseySlot
@@ -163,7 +174,8 @@ export default function RugbyField({
             isSelected={isSelected}
             isCapitan={!!isCapitan}
             isPateador={!!isPateador}
-            isCambio={isCambio}
+            highlightCambio={highlightCambio}
+            spinOnSelect={spinOnSelect}
             readOnly={readOnly}
             onPositionPress={onPositionPress}
           />

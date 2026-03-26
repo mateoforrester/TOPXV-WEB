@@ -50,6 +50,7 @@ export default function MiEquipoPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedPos, setSelectedPos] = useState<number | null>(null);
+  const [justSelectedPositions, setJustSelectedPositions] = useState<number[]>([]);
   const [modalCP, setModalCP] = useState<'capitan' | 'pateador' | null>(null);
   const [limitModal, setLimitModal] = useState<'club' | 'cambios' | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function MiEquipoPage() {
     try {
       const estado = await withTimeout(getEstadoVentanaFecha(), API_TIMEOUT_MS);
       if (estado.estado === 'armar_equipo') {
+        setJustSelectedPositions([]);
         setFechaActiva(estado.fecha);
         setFechaEnJuegoNum(null);
         const fecha = estado.fecha;
@@ -80,6 +82,7 @@ export default function MiEquipoPage() {
         }
         setEquipoAnterior(anterior);
         const tieneActual = equipoData?.jugadores?.length && equipoData.jugadores.some((j: { jugador_id?: string | null }) => j.jugador_id);
+        // Prioridad de carga: equipo actual -> equipo anterior -> vacío.
         const raw = tieneActual
           ? normalizarJugadores(equipoData!.jugadores)
           : (anterior?.jugadores?.length ? normalizarJugadores(anterior.jugadores) : initialJugadores.map(j => ({ ...j })));
@@ -97,6 +100,7 @@ export default function MiEquipoPage() {
           setJugadoresData(m);
         }
       } else if (estado.estado === 'fecha_en_juego') {
+        setJustSelectedPositions([]);
         setFechaActiva(null);
         setFechaEnJuegoNum(estado.numero);
         const fej = await getFechaPorNumero(estado.numero);
@@ -118,6 +122,7 @@ export default function MiEquipoPage() {
           }
         }
       } else {
+        setJustSelectedPositions([]);
         setFechaActiva(null);
         setFechaEnJuegoNum(null);
       }
@@ -141,6 +146,12 @@ export default function MiEquipoPage() {
       const fetched = await getJugadoresByIds([jugadorId]);
       if (fetched[0]) dataConNuevo[jugadorId] = fetched[0];
     }
+    const actualEnPosicion = equipo.find(j => j.posicion === posicion)?.jugador_id ?? '';
+    const huboCambio = actualEnPosicion !== jugadorId;
+    if (!huboCambio) {
+      setSelectedPos(null);
+      return;
+    }
     const nuevo = equipo.map(j => j.posicion === posicion ? { ...j, jugador_id: jugadorId } : j);
     const clubCounts = new Map<string, number>();
     for (const j of nuevo) {
@@ -159,6 +170,11 @@ export default function MiEquipoPage() {
         return;
       }
     }
+    // Siempre animar cuando el usuario confirma una nueva selección en el slot.
+    setJustSelectedPositions(prev => (prev.includes(posicion) ? prev : [...prev, posicion]));
+    setTimeout(() => {
+      setJustSelectedPositions(prev => prev.filter(p => p !== posicion));
+    }, 500);
     setEquipo(nuevo);
     setSelectedPos(null);
     const jugadoresFetched = await getJugadoresByIds([jugadorId]);
@@ -182,6 +198,16 @@ export default function MiEquipoPage() {
   const jugadoresDelEquipo = useMemo(() => {
     return equipo.filter(j => j.jugador_id && jugadoresData[j.jugador_id]).map(j => jugadoresData[j.jugador_id]);
   }, [equipo, jugadoresData]);
+
+  const changedComparedToPrevious = useMemo(() => {
+    if (!equipoAnterior?.jugadores?.length) return [];
+    const anteriorMap = new Map(
+      equipoAnterior.jugadores.map((j: JugadorPosicion) => [j.posicion, j.jugador_id || ''])
+    );
+    return equipo
+      .filter((j) => (anteriorMap.get(j.posicion) || '') !== (j.jugador_id || ''))
+      .map((j) => j.posicion);
+  }, [equipo, equipoAnterior]);
 
   const elegirCP = (tipo: 'capitan' | 'pateador', jugador: Jugador) => {
     if (tipo === 'capitan') { setCapitanId(jugador.id); persistEquipo(equipo, jugador.id, pateadorId); }
@@ -266,7 +292,9 @@ export default function MiEquipoPage() {
               jugadores={equipo} jugadoresData={jugadoresData}
               onPositionPress={pos => !readOnly && setSelectedPos(pos)}
               selectedPosicion={selectedPos} capitanId={capitanId} pateadorId={pateadorId}
-              readOnly={readOnly} equipoAnterior={equipoAnterior}
+              readOnly={readOnly}
+              changedComparedToPrevious={changedComparedToPrevious}
+              justSelectedPositions={justSelectedPositions}
               fillOnMobile
             />
           </div>

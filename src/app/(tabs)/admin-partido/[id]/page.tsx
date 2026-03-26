@@ -40,6 +40,7 @@ type PuntajeForm = {
 };
 
 const API_TIMEOUT_MS = 20000;
+const FIXTURE_LAST_UPDATE_KEY = 'fixture_last_update_at';
 
 function numVal(raw: string): number {
   const n = Number.parseInt(raw, 10);
@@ -268,6 +269,7 @@ export default function AdminPartidoPage() {
       });
 
       await withTimeout(upsertPuntajesJugador(rows), API_TIMEOUT_MS);
+      window.localStorage.setItem(FIXTURE_LAST_UPDATE_KEY, String(Date.now()));
       if (advertenciaFixture) {
         window.alert(`Puntajes guardados.\n\n${advertenciaFixture}`);
       }
