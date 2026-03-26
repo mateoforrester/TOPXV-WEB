@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter, redirect } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ClipboardList, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { getFechas, getFixture } from '@/services/api';
 import { Fecha, Partido, Club } from '@/types';
 import { TabScreen } from '@/components/TabScreen';
 import { LoadingView } from '@/components/LoadingView';
-import { AnimatedCard } from '@/components/AnimatedCard';
-import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { withTimeout } from '@/utils/withTimeout';
 
-function ClubLogo({ club, size = 40 }: { club: Club; size?: number }) {
+const API_TIMEOUT_MS = 20000;
+
+function ClubLogo({ club, size = 44 }: { club: Club; size?: number }) {
   const [err, setErr] = useState(false);
   if (club.logo_url && !err) {
     return (
@@ -27,42 +28,12 @@ function ClubLogo({ club, size = 40 }: { club: Club; size?: number }) {
     );
   }
   return (
-    <div className="bg-azul rounded-lg flex items-center justify-center border border-white/25"
-      style={{ width: size, height: size }}>
-      <span className="text-white font-bold" style={{ fontSize: size * 0.45 }}>
-        {(club.nombre || '?').charAt(0).toUpperCase()}
-      </span>
+    <div
+      className="bg-azul rounded-lg flex items-center justify-center border border-white/30 text-white font-bold"
+      style={{ width: size, height: size }}
+    >
+      {(club.nombre || '?').charAt(0).toUpperCase()}
     </div>
-  );
-}
-
-function PartidoCard({ partido, onCargar }: { partido: Partido; onCargar: (p: Partido) => void }) {
-  const local = partido.club_local ?? { id: partido.club_local_id, nombre: 'Local' };
-  const visit = partido.club_visitante ?? { id: partido.club_visitante_id, nombre: 'Visitante' };
-  const tieneResultado = partido.puntos_local != null && partido.puntos_visitante != null;
-
-  return (
-    <button onClick={() => onCargar(partido)}
-      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] p-4 mb-3 hover:bg-white/[0.1] transition-colors text-left">
-      <div className="flex items-center justify-between">
-        <div className="flex-1 flex flex-col items-center">
-          <ClubLogo club={local} />
-          <span className="text-xs font-semibold text-white/90 mt-1 text-center truncate max-w-[90px]">{local.nombre}</span>
-        </div>
-        <div className="px-3">
-          {tieneResultado ? (
-            <span className="text-lg font-bold text-white/95">{partido.puntos_local} - {partido.puntos_visitante}</span>
-          ) : (
-            <span className="text-sm font-medium text-white/60">VS</span>
-          )}
-        </div>
-        <div className="flex-1 flex flex-col items-center">
-          <ClubLogo club={visit} />
-          <span className="text-xs font-semibold text-white/90 mt-1 text-center truncate max-w-[90px]">{visit.nombre}</span>
-        </div>
-      </div>
-      <p className="text-xs text-azul text-center mt-2 font-medium">Cargar puntajes</p>
-    </button>
   );
 }
 
@@ -75,91 +46,135 @@ export default function AdminPuntajesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_TIMEOUT_MS = 20000;
+  const isAdmin = usuario?.rol === 'admin';
 
-  const loadFechas = useCallback(async () => {
-    try {
-      const data = await withTimeout(getFechas(), API_TIMEOUT_MS);
-      setFechas(data);
-      setFechaSel(prev => prev ?? data[0] ?? null);
-      return data;
-    } catch (e) {
-      console.error(e);
-      setError(e instanceof Error ? e.message : 'Error al cargar fechas. Reintenta.');
-      return [];
-    }
-  }, []);
+  useEffect(() => {
+    if (!authLoading && !isAdmin) router.replace('/inicio');
+  }, [authLoading, isAdmin, router]);
 
-  const loadPartidos = useCallback(async (fecha?: Fecha | null) => {
-    const f = fecha ?? fechaSel;
-    if (!f) {
-      setPartidos([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await withTimeout(getFixture(f.id), API_TIMEOUT_MS);
-      setPartidos(data);
-    } catch (e) {
-      console.error(e);
-      setPartidos([]);
-      setError(e instanceof Error ? e.message : 'Error al cargar partidos. Reintenta.');
-    } finally {
-      setLoading(false);
-    }
-  }, [fechaSel]);
+  useEffect(() => {
+    if (authLoading || !isAdmin) return;
+    const run = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await withTimeout(getFechas(), API_TIMEOUT_MS);
+        setFechas(data);
+        setFechaSel((prev) => prev ?? data[0] ?? null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudieron cargar las fechas.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
+  }, [authLoading, isAdmin]);
 
-  const handleRetry = useCallback(async () => {
-    setError(null);
-    const data = await loadFechas();
-    const sel = data?.[0] ?? fechaSel;
-    if (sel) await loadPartidos(sel);
-  }, [loadFechas, loadPartidos, fechaSel]);
+  useEffect(() => {
+    if (authLoading || !isAdmin || !fechaSel) return;
+    const run = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await withTimeout(getFixture(fechaSel.id), API_TIMEOUT_MS);
+        setPartidos(data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudieron cargar los partidos.');
+        setPartidos([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
+  }, [authLoading, isAdmin, fechaSel]);
 
-  useEffect(() => { loadFechas(); }, [loadFechas]);
-  useEffect(() => { loadPartidos(); }, [loadPartidos]);
+  const fechaPills = useMemo(
+    () =>
+      fechas.map((f) => (
+        <button
+          key={f.id}
+          onClick={() => setFechaSel(f)}
+          className={`px-3 py-1.5 rounded-xl text-sm border transition-colors ${
+            fechaSel?.id === f.id
+              ? 'bg-oro/25 border-oro text-oro'
+              : 'bg-white/5 border-white/15 text-white/80 hover:bg-white/10'
+          }`}
+        >
+          Fecha {f.numero}
+        </button>
+      )),
+    [fechas, fechaSel?.id]
+  );
 
-  if (authLoading) return <TabScreen title="Cargar puntajes"><LoadingView /></TabScreen>;
-  if (!authLoading && usuario?.rol !== 'admin') { redirect('/inicio'); }
+  if (authLoading || (!isAdmin && !error)) {
+    return (
+      <TabScreen title="Cargar puntajes">
+        <LoadingView message="Cargando..." />
+      </TabScreen>
+    );
+  }
 
   return (
     <TabScreen
       title="Cargar puntajes"
-      headerRight={
-        <button onClick={() => router.back()} className="p-2 text-oro hover:opacity-80">
-          <ArrowLeft size={24} />
-        </button>
-      }
+      subtitle="Selecciona un partido para cargar estadisticas por jugador"
+      headerRight={<ClipboardList className="text-oro" size={20} />}
     >
-      <div className="w-full">
-        <div className="pb-4 mb-4 border-b border-white/10">
-          <p className="text-xs text-white/60 mb-2">Fecha</p>
-          <div className="flex gap-2 flex-wrap">
-            {fechas.map(f => (
-              <button key={f.id} onClick={() => setFechaSel(f)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  fechaSel?.id === f.id
-                    ? 'bg-oro/30 border border-oro text-oro'
-                    : 'bg-white/10 text-white/80 hover:bg-white/15'
-                }`}>
-                {f.numero}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="space-y-4">
+        <div className="flex gap-2 overflow-x-auto pb-1">{fechaPills}</div>
 
-        {loading ? <LoadingView /> : (
-          <div>
-            <h3 className="text-sm font-bold text-oro uppercase tracking-wider mb-3">Partidos</h3>
-            {partidos.map((p, i) => (
-              <AnimatedCard key={p.id} delay={i * 0.03}>
-                <PartidoCard partido={p} onCargar={(partido) => router.push(`/admin-partido?id=${partido.id}`)} />
-              </AnimatedCard>
-            ))}
+        {error && (
+          <div className="rounded-2xl border border-red-500/40 bg-red-900/20 p-4 text-red-100 text-sm">
+            <p>{error}</p>
+            <button
+              className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15"
+              onClick={() => setFechaSel((f) => (f ? { ...f } : f))}
+            >
+              <RotateCcw size={14} />
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {loading ? (
+          <LoadingView message="Cargando partidos..." />
+        ) : (
+          <div className="space-y-3">
+            {partidos.map((p) => {
+              const local = p.club_local ?? { id: p.club_local_id, nombre: 'Local' };
+              const visitante = p.club_visitante ?? { id: p.club_visitante_id, nombre: 'Visitante' };
+              const hasResult = p.puntos_local != null && p.puntos_visitante != null;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => router.push(`/admin-partido/${p.id}`)}
+                  className="w-full rounded-2xl border border-white/15 bg-white/5 hover:bg-white/10 p-4 text-left"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 flex flex-col items-center">
+                      <ClubLogo club={local} />
+                      <p className="text-sm text-white/90 mt-2 text-center">{local.nombre}</p>
+                    </div>
+                    <div className="min-w-[72px] text-center">
+                      {hasResult ? (
+                        <span className="text-base font-bold text-white">
+                          {p.puntos_local} - {p.puntos_visitante}
+                        </span>
+                      ) : (
+                        <span className="text-sm font-semibold text-white/60">VS</span>
+                      )}
+                    </div>
+                    <div className="flex-1 flex flex-col items-center">
+                      <ClubLogo club={visitante} />
+                      <p className="text-sm text-white/90 mt-2 text-center">{visitante.nombre}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-oro mt-3 text-center font-semibold">Cargar puntajes</p>
+                </button>
+              );
+            })}
             {partidos.length === 0 && (
-              <p className="text-sm text-white/50 italic">No hay partidos para esta fecha.</p>
+              <p className="text-white/60 text-sm italic py-6 text-center">No hay partidos para esta fecha.</p>
             )}
           </div>
         )}

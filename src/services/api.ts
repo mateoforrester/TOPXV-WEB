@@ -1,3 +1,4 @@
+import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import {
   Usuario, Jugador, JugadorListado, Club, Fecha, EquipoFecha,
@@ -104,7 +105,36 @@ export async function getJugadoresListado(opts?: {
   }
   const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+  const rows = (data || []) as Array<JugadorListado & { posicion_principal?: number }>;
+  const prioridadPosicion = new Map<number, number>();
+  (opts?.posicion_ids || []).forEach((posId, idx) => prioridadPosicion.set(posId, idx));
+
+  const byJugador = new Map<string, JugadorListado & { posicion_principal?: number }>();
+  rows.forEach((row) => {
+    const actual = byJugador.get(row.id);
+    if (!actual) {
+      byJugador.set(row.id, row);
+      return;
+    }
+
+    const rankActual = prioridadPosicion.get(actual.posicion_id) ?? Number.MAX_SAFE_INTEGER;
+    const rankNuevo = prioridadPosicion.get(row.posicion_id) ?? Number.MAX_SAFE_INTEGER;
+    if (rankNuevo < rankActual) {
+      byJugador.set(row.id, row);
+      return;
+    }
+    if (rankNuevo > rankActual) return;
+
+    const actualEsPrincipal =
+      actual.posicion_principal != null && actual.posicion_id === actual.posicion_principal;
+    const nuevoEsPrincipal =
+      row.posicion_principal != null && row.posicion_id === row.posicion_principal;
+    if (!actualEsPrincipal && nuevoEsPrincipal) {
+      byJugador.set(row.id, row);
+    }
+  });
+
+  return Array.from(byJugador.values());
 }
 
 export async function getClubes(): Promise<Club[]> {
@@ -266,11 +296,54 @@ export async function getPartidoById(partidoId: string): Promise<Partido | null>
   return data ?? null;
 }
 
+function isTryPenalColumnsMissingError(error: PostgrestError): boolean {
+  const blob = `${error.message} ${error.details ?? ''} ${error.hint ?? ''}`;
+  if (error.code === 'PGRST204' && /try_penal/i.test(blob)) return true;
+  return /try_penal_(local|visitante)/i.test(blob);
+}
+
 export async function updatePartidoResult(
-  partidoId: string, puntos_local: number | null, puntos_visitante: number | null
-): Promise<void> {
-  const { error } = await supabase.from('fixture').update({ puntos_local, puntos_visitante }).eq('id', partidoId);
-  if (error) throw error;
+  partidoId: string,
+  options: {
+    try_penal_local: number;
+    try_penal_visitante: number;
+    actualizarMarcador: boolean;
+    puntos_local?: number | null;
+    puntos_visitante?: number | null;
+  }
+): Promise<string | undefined> {
+  const patch: Record<string, number | null> = {
+    try_penal_local: Math.max(0, options.try_penal_local),
+    try_penal_visitante: Math.max(0, options.try_penal_visitante),
+  };
+  if (options.actualizarMarcador) {
+    patch.puntos_local = options.puntos_local ?? null;
+    patch.puntos_visitante = options.puntos_visitante ?? null;
+  }
+  const { error } = await supabase.from('fixture').update(patch).eq('id', partidoId);
+  if (!error) return undefined;
+
+  if (isTryPenalColumnsMissingError(error)) {
+    if (options.actualizarMarcador) {
+      const { error: err2 } = await supabase
+        .from('fixture')
+        .update({
+          puntos_local: options.puntos_local ?? null,
+          puntos_visitante: options.puntos_visitante ?? null,
+        })
+        .eq('id', partidoId);
+      if (err2) throw err2;
+      return (
+        'El marcador se guardó, pero tu proyecto Supabase no tiene las columnas try_penal_local / try_penal_visitante. ' +
+        'En SQL Editor ejecutá supabase/migrations/20250326110000_fixture_try_penal.sql y volvé a guardar.'
+      );
+    }
+    throw new Error(
+      'Tu proyecto Supabase no tiene las columnas de try penal en fixture. En SQL Editor ejecutá: supabase/migrations/20250326110000_fixture_try_penal.sql'
+    );
+  }
+
+  throw error;
 }
 
 export async function upsertPuntajesJugador(

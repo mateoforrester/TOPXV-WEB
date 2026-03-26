@@ -67,6 +67,9 @@ export interface PuntajeJugador {
   titularidad?: boolean;
   victoria?: boolean;
   victoria_bonus?: boolean;
+  victoria_visitante?: boolean;
+  bonus_ofensivo?: boolean;
+  bonus_defensivo?: boolean;
   tries: number;
   conversiones: number;
   penales: number;
@@ -74,7 +77,7 @@ export interface PuntajeJugador {
   amarilla?: number;
   roja?: number;
   figura_partido?: boolean;
-  puntos_oro?: number;
+  puntos_oro?: boolean;
 }
 
 export interface Partido {
@@ -86,6 +89,8 @@ export interface Partido {
   club_visitante?: Club;
   puntos_local?: number;
   puntos_visitante?: number;
+  try_penal_local?: number;
+  try_penal_visitante?: number;
   fecha_partido: string;
 }
 
