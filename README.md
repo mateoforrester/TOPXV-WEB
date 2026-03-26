@@ -36,7 +36,9 @@ NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 ```
 
-Podés usar como referencia `.env.local.example`. Si no definís estas variables, la app usa fallbacks del proyecto (solo para desarrollo local).
+Podés usar como referencia `.env.local.example`.
+
+Estas variables son obligatorias también en producción y desarrollo: la app web no inicializa Supabase si faltan.
 
 ---
 
@@ -146,6 +148,14 @@ La web usa las mismas tablas que la app móvil: `usuarios`, `clubes`, `fechas`, 
 2. **Build command:** `npm run build`
 3. **Output:** uso por defecto de Next.js (no hace falta indicar carpeta si es un proyecto Next).
 4. Variables de entorno: `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+## Checklist de salida a producción
+
+- Registro web: todos los campos obligatorios (`nombre`, `apellido`, `club`, `nombre_equipo`, `email`, `password`).
+- Variables web obligatorias configuradas en el host (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+- RLS activo y políticas validadas en Supabase para tablas críticas (`usuarios`, `equipos_fecha`, `puntajes_jugador`).
+- No exponer `SUPABASE_SERVICE_ROLE_KEY` en cliente (solo server/Edge).
+- Edge Function `send-push` con `PUSH_SECRET` definido y `ALLOWED_ORIGIN` restringido al dominio productivo.
 
 ---
 

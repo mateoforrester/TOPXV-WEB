@@ -60,8 +60,22 @@ export default function LoginPage() {
         await signIn(email, password);
         router.push('/inicio');
       } else {
-        if (!nombre.trim()) {
+        const nombreTrim = nombre.trim();
+        const apellidoTrim = apellido.trim();
+        const nombreEquipoTrim = nombreEquipo.trim();
+        const emailTrim = email.trim();
+        if (!nombreTrim) {
           setError('El nombre es obligatorio');
+          setLoading(false);
+          return;
+        }
+        if (!apellidoTrim) {
+          setError('El apellido es obligatorio');
+          setLoading(false);
+          return;
+        }
+        if (!nombreEquipoTrim) {
+          setError('El nombre de equipo es obligatorio');
           setLoading(false);
           return;
         }
@@ -70,10 +84,20 @@ export default function LoginPage() {
           setLoading(false);
           return;
         }
-        await signUp(email, password, nombre, {
-          apellido: apellido || undefined,
+        if (!emailTrim) {
+          setError('El email es obligatorio');
+          setLoading(false);
+          return;
+        }
+        if (!password) {
+          setError('La contraseña es obligatoria');
+          setLoading(false);
+          return;
+        }
+        await signUp(emailTrim, password, nombreTrim, {
+          apellido: apellidoTrim,
           club_id: clubId,
-          nombre_equipo: nombreEquipo || undefined,
+          nombre_equipo: nombreEquipoTrim,
         });
         setSuccess('Cuenta creada correctamente. Ya podés iniciar sesión.');
         setMode('login');
@@ -144,16 +168,19 @@ export default function LoginPage() {
                   type="text" placeholder="Nombre *" value={nombre}
                   onChange={e => setNombre(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-oro/40 bg-white/5 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-oro focus:border-oro transition-all"
+                  required={mode === 'register'}
                 />
                 <input
-                  type="text" placeholder="Apellido" value={apellido}
+                  type="text" placeholder="Apellido *" value={apellido}
                   onChange={e => setApellido(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-oro/40 bg-white/5 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-oro focus:border-oro transition-all"
+                  required={mode === 'register'}
                 />
                 <input
-                  type="text" placeholder="Nombre de tu equipo" value={nombreEquipo}
+                  type="text" placeholder="Nombre de tu equipo *" value={nombreEquipo}
                   onChange={e => setNombreEquipo(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-oro/40 bg-white/5 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-oro focus:border-oro transition-all"
+                  required={mode === 'register'}
                 />
                 <div className="relative" ref={clubDropdownRef}>
                   <button

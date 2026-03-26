@@ -65,15 +65,11 @@ export default function MiEquipoPage() {
   const [selectedDesgloseJugadorId, setSelectedDesgloseJugadorId] = useState<string | null>(null);
   const [desgloseFuente, setDesgloseFuente] = useState<'visualizada' | 'ultimaFecha'>('visualizada');
 
-  // Datos para la solapa "Puntos última fecha" (solo cuando el usuario está editando su equipo).
   const [ultimaEquipo, setUltimaEquipo] = useState<JugadorPosicion[] | null>(null);
   const [jugadoresUltimaData, setJugadoresUltimaData] = useState<Record<string, Jugador>>({});
   const [puntajesUltimaByJugador, setPuntajesUltimaByJugador] = useState<Record<string, PuntajeJugadorDetalle>>({});
   const [ultimaCapitanId, setUltimaCapitanId] = useState<string | undefined>();
   const [ultimaPateadorId, setUltimaPateadorId] = useState<string | undefined>();
-  const [showPuntosUltimaFecha, setShowPuntosUltimaFecha] = useState(false);
-  const [loadingPuntosUltimaFecha, setLoadingPuntosUltimaFecha] = useState(false);
-  const [ultimaFechaLoadedId, setUltimaFechaLoadedId] = useState<string | null>(null);
 
   const armarEquipoCompleto = (raw: JugadorPosicion[]): JugadorPosicion[] => {
     const byPos = new Map(raw.map(j => [j.posicion, j]));
@@ -288,63 +284,6 @@ export default function MiEquipoPage() {
     return base + bonusCapitan + bonusPateador;
   };
 
-  const handleTogglePuntosUltimaFecha = async () => {
-    if (!canEdit) return;
-    if (!ultimaFecha || !user?.id) return;
-
-    if (showPuntosUltimaFecha) {
-      setShowPuntosUltimaFecha(false);
-      return;
-    }
-
-    if (ultimaFechaLoadedId === ultimaFecha.id) {
-      setShowPuntosUltimaFecha(true);
-      return;
-    }
-
-    setLoadingPuntosUltimaFecha(true);
-    try {
-      const eq = await getEquipoFecha(user.id, ultimaFecha.id);
-      const raw = eq?.jugadores?.length
-        ? normalizarJugadores(eq.jugadores)
-        : initialJugadores.map((j) => ({ ...j }));
-      const full = armarEquipoCompleto(raw);
-
-      setUltimaEquipo(full);
-      setUltimaCapitanId(eq?.capitan_id ?? undefined);
-      setUltimaPateadorId(eq?.pateador_id ?? undefined);
-      const ids = full.map((j) => j.jugador_id).filter(Boolean) as string[];
-
-      if (ids.length > 0) {
-        const dataJugadores = await getJugadoresByIds(ids);
-        const m: Record<string, Jugador> = {};
-        dataJugadores.forEach((j) => {
-          m[j.id] = j;
-        });
-        setJugadoresUltimaData(m);
-        const puntajes = await getPuntajesJugadoresFecha(ultimaFecha.id, ids);
-        setPuntajesUltimaByJugador(puntajes);
-      } else {
-        setJugadoresUltimaData({});
-        setPuntajesUltimaByJugador({});
-      }
-
-      setUltimaFechaLoadedId(ultimaFecha.id);
-      setShowPuntosUltimaFecha(true);
-    } catch (e) {
-      console.error('Error loading puntajes ultima fecha:', e);
-      setJugadoresUltimaData({});
-      setPuntajesUltimaByJugador({});
-      setUltimaEquipo(null);
-      setUltimaCapitanId(undefined);
-      setUltimaPateadorId(undefined);
-      setUltimaFechaLoadedId(ultimaFecha.id);
-      setShowPuntosUltimaFecha(true);
-    } finally {
-      setLoadingPuntosUltimaFecha(false);
-    }
-  };
-
   const jugadoresDelEquipo = useMemo(() => {
     return equipo.filter(j => j.jugador_id && jugadoresData[j.jugador_id]).map(j => jugadoresData[j.jugador_id]);
   }, [equipo, jugadoresData]);
@@ -408,7 +347,6 @@ export default function MiEquipoPage() {
     () => fechas.filter((f) => f.numero < fechaBaseNumero).sort((a, b) => b.numero - a.numero),
     [fechas, fechaBaseNumero]
   );
-  const ultimaFecha = useMemo(() => ultimaFechaCompletada(fechas), [fechas]);
   const puntosByJugadorId = useMemo(() => {
     const out: Record<string, number> = {};
     Object.values(puntajesFechaByJugador).forEach((p) => {
@@ -420,22 +358,6 @@ export default function MiEquipoPage() {
     });
     return out;
   }, [puntajesFechaByJugador, capitanId, pateadorId]);
-
-  const puntosUltimaByJugadorId = useMemo(() => {
-    const out: Record<string, number> = {};
-    Object.values(puntajesUltimaByJugador).forEach((p) => {
-      out[p.jugador_id] = calcularAporteJugador(
-        p,
-        ultimaCapitanId === p.jugador_id,
-        ultimaPateadorId === p.jugador_id
-      );
-    });
-    return out;
-  }, [puntajesUltimaByJugador, ultimaCapitanId, ultimaPateadorId]);
-
-  const totalUltimaFechaPts = useMemo(() => {
-    return Object.values(puntosUltimaByJugadorId).reduce((s, p) => s + p, 0);
-  }, [puntosUltimaByJugadorId]);
 
   const selectedDesgloseJugador = selectedDesgloseJugadorId
     ? desgloseFuente === 'ultimaFecha'
@@ -558,97 +480,6 @@ export default function MiEquipoPage() {
       </header>
 
       <div className="px-4 pb-6 flex-1 min-h-0 flex flex-col w-full">
-        {canEdit && ultimaFecha && (
-          <div className="mb-4">
-            <button
-              type="button"
-              onClick={() => void handleTogglePuntosUltimaFecha()}
-              className="w-full rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/[0.06] transition-colors"
-            >
-              <div className="min-w-0 text-left">
-                <p className="text-sm font-semibold text-white/90 truncate">
-                  Puntos última fecha (Fecha {ultimaFecha.numero})
-                </p>
-                <p className="text-xs text-white/60">
-                  {showPuntosUltimaFecha ? 'Ocultar detalle' : 'Ver jugadores y desglose'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {loadingPuntosUltimaFecha ? (
-                  <Loader2 size={16} className="animate-spin text-oro" />
-                ) : ultimaFechaLoadedId === ultimaFecha.id ? (
-                  <span className="text-sm font-bold text-oro">
-                    {totalUltimaFechaPts} pts
-                  </span>
-                ) : (
-                  <span className="text-sm font-bold text-white/60"> </span>
-                )}
-              </div>
-            </button>
-
-            <AnimatePresence>
-              {showPuntosUltimaFecha && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
-                  className="mt-3 rounded-2xl border border-white/10 bg-bordo-dark/30 overflow-hidden"
-                >
-                  <div className="px-4 py-3 border-b border-white/10">
-                    <p className="text-sm font-bold text-oro">
-                      Tus puntos - Fecha {ultimaFecha.numero}
-                    </p>
-                    <p className="text-xs text-white/60">
-                      Click en un jugador para ver el detalle
-                    </p>
-                  </div>
-
-                  <div className="p-3 max-h-[38vh] overflow-y-auto">
-                    {loadingPuntosUltimaFecha ? (
-                      <p className="text-sm text-white/70">Cargando puntajes...</p>
-                    ) : !ultimaEquipo ? (
-                      <p className="text-sm text-white/70">No hay equipo guardado para esta fecha.</p>
-                    ) : Object.keys(puntajesUltimaByJugador).length === 0 ? (
-                      <p className="text-sm text-white/70">
-                        Aun no hay puntajes cargados para la última fecha.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {ultimaEquipo
-                          .filter((j) => j.jugador_id)
-                          .map((j) => {
-                            const jugadorId = j.jugador_id;
-                            const jugador = jugadoresUltimaData[jugadorId];
-                            const puntos = puntosUltimaByJugadorId[jugadorId] ?? 0;
-                            return (
-                              <button
-                                key={jugadorId}
-                                type="button"
-                                onClick={() => {
-                                  setDesgloseFuente('ultimaFecha');
-                                  setSelectedDesgloseJugadorId(jugadorId);
-                                }}
-                                className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.07] transition-colors"
-                              >
-                                <span className="text-sm font-semibold text-white/90 truncate">
-                                  {jugador ? `${jugador.apellido} ${jugador.nombre}` : `#${jugadorId}`}
-                                </span>
-                                <span className="text-sm font-bold text-oro shrink-0">
-                                  {puntos} pts
-                                </span>
-                              </button>
-                            );
-                          })}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
