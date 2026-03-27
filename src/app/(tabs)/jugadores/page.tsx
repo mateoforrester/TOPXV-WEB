@@ -82,7 +82,7 @@ export default function JugadoresPage() {
           ) : filtered.map((item, idx) => (
             <motion.div key={item.id}
               initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.02 }}
+              transition={{ delay: Math.min(idx, 24) * 0.012 }}
               className="flex items-center p-3 rounded-xl bg-white/10 mb-2 hover:bg-white/15 transition-colors">
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-white/95 text-sm">{item.apellido}, {item.nombre}</p>

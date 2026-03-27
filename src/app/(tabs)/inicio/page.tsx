@@ -94,8 +94,15 @@ export default function InicioPage() {
       setRanking(rankingData); setFechas(fechasData); setEstadoVentana(estado);
       const ultima = ultimaFechaCompletada(fechasData);
       const prox = proximaFecha(fechasData, estado);
-      if (ultima?.id) {
-        const rf = await withTimeout(getRankingFecha(ultima.id), 15000);
+      const rfPromise = ultima?.id
+        ? withTimeout(getRankingFecha(ultima.id), 15000)
+        : Promise.resolve([] as Awaited<ReturnType<typeof getRankingFecha>>);
+      const mejorXVPromise = withTimeout(getMejorXVGeneralSlots(), 15000);
+      const fixturePromise = prox?.id
+        ? withTimeout(getFixture(prox.id), 15000)
+        : Promise.resolve([] as Partido[]);
+      const [rf, mejorXV, fixtureProx] = await Promise.all([rfPromise, mejorXVPromise, fixturePromise]);
+      if (ultima?.id && rf.length) {
         setGanadorUltima(rf[0] ?? null);
         if (usuario?.id) {
           const mi = rf.find(r => r.usuario_id === usuario.id);
@@ -104,11 +111,11 @@ export default function InicioPage() {
           setMiPtsUltimaFecha(null);
         }
       } else {
+        setGanadorUltima(null);
         setMiPtsUltimaFecha(null);
       }
-      const mejorXV = await withTimeout(getMejorXVGeneralSlots(), 15000);
       setMejorXVGeneral(mejorXV);
-      if (prox?.id) setFixtureProxima(await withTimeout(getFixture(prox.id), 15000));
+      if (prox?.id) setFixtureProxima(fixtureProx);
     } catch (e) {
       console.error('Error loading home:', e);
       setError(e instanceof Error ? e.message : 'Error al cargar. Reintenta.');

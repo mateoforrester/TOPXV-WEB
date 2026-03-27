@@ -24,21 +24,21 @@ export const COLORS = {
 };
 
 export const POSICIONES_RUGBY: PosicionRugby[] = [
-  { numero: 1, nombre: 'Pilar Izquierdo', categoria: 'Forward', x: 14.5, y: 12 },
-  { numero: 2, nombre: 'Hooker', categoria: 'Forward', x: 46.5, y: 12 },
-  { numero: 3, nombre: 'Pilar Derecho', categoria: 'Forward', x: 77.5, y: 12 },
-  { numero: 4, nombre: 'Segunda Línea Izquierdo', categoria: 'Forward', x: 30.5, y: 25 },
-  { numero: 5, nombre: 'Segunda Línea Derecho', categoria: 'Forward', x: 62, y: 25 },
-  { numero: 6, nombre: 'Ala Izquierdo', categoria: 'Forward', x: 14, y: 38 },
-  { numero: 7, nombre: 'Ala Derecho', categoria: 'Forward', x: 79, y: 38 },
-  { numero: 8, nombre: 'Octavo', categoria: 'Forward', x: 46.5, y: 38 },
-  { numero: 9, nombre: 'Medio Scrum', categoria: 'Back', x: 30.5, y: 51 },
-  { numero: 10, nombre: 'Apertura', categoria: 'Back', x: 62, y: 51 },
-  { numero: 11, nombre: 'Wing Izquierdo', categoria: 'Back', x: 14.5, y: 65 },
+  { numero: 1, nombre: 'Pilar Izquierdo', categoria: 'Forward', x: 14.6, y: 11 },
+  { numero: 2, nombre: 'Hooker', categoria: 'Forward', x: 47, y: 11 },
+  { numero: 3, nombre: 'Pilar Derecho', categoria: 'Forward', x: 79.3, y: 11 },
+  { numero: 4, nombre: 'Segunda Línea Izquierdo', categoria: 'Forward', x: 30.8, y: 24 },
+  { numero: 5, nombre: 'Segunda Línea Derecho', categoria: 'Forward', x: 63.15, y: 24},
+  { numero: 6, nombre: 'Ala Izquierdo', categoria: 'Forward', x: 14.6, y: 37 },
+  { numero: 7, nombre: 'Ala Derecho', categoria: 'Forward', x: 79.3, y: 37 },
+  { numero: 8, nombre: 'Octavo', categoria: 'Forward', x: 47, y: 37  },
+  { numero: 9, nombre: 'Medio Scrum', categoria: 'Back', x: 30.8, y: 50},
+  { numero: 10, nombre: 'Apertura', categoria: 'Back', x: 63.15, y: 50 },
+  { numero: 11, nombre: 'Wing Izquierdo', categoria: 'Back', x: 14.6, y: 65 },
   { numero: 12, nombre: 'Primer Centro', categoria: 'Back', x: 36.33, y: 65 },
   { numero: 13, nombre: 'Segundo Centro', categoria: 'Back', x: 58.66, y: 65 },
-  { numero: 14, nombre: 'Wing Derecho', categoria: 'Back', x: 77.5, y: 65},
-  { numero: 15, nombre: 'Fullback', categoria: 'Back', x: 44.5, y: 76 },
+  { numero: 14, nombre: 'Wing Derecho', categoria: 'Back', x: 79.3, y: 65},
+  { numero: 15, nombre: 'Fullback', categoria: 'Back', x: 47, y: 76  },
 ];
 
 export const MAX_JUGADORES_MISMO_CLUB = 4;

@@ -405,43 +405,51 @@ export default function MiEquipoPage() {
   return (
     <div className="min-h-screen h-full flex flex-col">
       <div className="max-w-4xl mx-auto flex flex-col flex-1 min-h-0 w-full">
-      <header className="pt-4 pb-2 px-6 shrink-0">
-        {fechasHistorial.length > 0 && (
-          <div className="mb-2 max-w-[260px] flex items-center gap-2">
-            <div className="flex-1">
+      <header className="pt-4 pb-2 pl-1.5 pr-6 md:pl-1 shrink-0">
+        {fechasHistorial.length > 0 ? (
+          <div className="grid gap-y-2 md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-x-2">
+            <div className="flex items-center gap-1 justify-self-start w-max max-w-[min(100%,10.5rem)] -ml-0.5 md:-ml-1">
               <select
                 id="mi-equipo-fecha"
                 value={fechaVisualizadaId ?? ''}
                 onChange={(e) => void handleFechaVisualizadaChange(e.target.value)}
-                className="w-full rounded-xl bg-bordo-dark border border-white/15 px-3 py-2 text-sm text-white"
+                className="w-[6.75rem] sm:w-[7.25rem] shrink-0 rounded-lg bg-bordo-dark border border-white/15 px-1.5 py-1.5 text-xs text-white"
               >
-                <option value="">Ver equipos</option>
+                <option value="">Ver equipos anteriores</option>
                 {fechasHistorial.map((f) => (
                   <option key={f.id} value={f.id}>
                     {`Fecha ${f.numero}`}
                   </option>
                 ))}
               </select>
+              {fechaVisualizadaId && (
+                <button
+                  type="button"
+                  onClick={() => void handleFechaVisualizadaChange('')}
+                  className="shrink-0 h-8 w-8 rounded-lg border border-white/15 bg-bordo-dark text-white/85 hover:text-white hover:border-white/30 flex items-center justify-center"
+                  title="Volver a fecha actual"
+                  aria-label="Volver a fecha actual"
+                >
+                  <RotateCcw size={14} />
+                </button>
+              )}
             </div>
-            {fechaVisualizadaId && (
-              <button
-                type="button"
-                onClick={() => void handleFechaVisualizadaChange('')}
-                className="h-10 w-10 rounded-xl border border-white/15 bg-bordo-dark text-white/85 hover:text-white hover:border-white/30 flex items-center justify-center"
-                title="Volver a fecha actual"
-                aria-label="Volver a fecha actual"
-              >
-                <RotateCcw size={16} />
-              </button>
-            )}
+            <div className="text-center min-w-0 md:col-start-2 md:row-start-1 px-1">
+              <h1 className="text-2xl md:text-3xl font-bold text-oro">
+                {canEdit ? 'Armá tu equipo' : 'Mi Equipo'}
+              </h1>
+              {subtitle && <p className="text-white/70 text-sm mt-1">{subtitle}</p>}
+            </div>
+            <div className="hidden md:block md:col-start-3 md:row-start-1" aria-hidden />
+          </div>
+        ) : (
+          <div className="text-center">
+            <h1 className="text-2xl md:text-3xl font-bold text-oro">
+              {canEdit ? 'Armá tu equipo' : 'Mi Equipo'}
+            </h1>
+            {subtitle && <p className="text-white/70 text-sm mt-1">{subtitle}</p>}
           </div>
         )}
-        <div className="text-center">
-        <h1 className="text-2xl md:text-3xl font-bold text-oro">
-          {canEdit ? 'Armá tu equipo' : 'Mi Equipo'}
-        </h1>
-        {subtitle && <p className="text-white/70 text-sm mt-1">{subtitle}</p>}
-        </div>
         {/* Barra Capitán / Pateador como en mobile: mitad oro, mitad azul */}
         {jugadoresDelEquipo.length === 15 && (
           <div className="mt-3 max-w-sm mx-auto">

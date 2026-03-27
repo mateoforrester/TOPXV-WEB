@@ -82,7 +82,7 @@ export default function RankingPage() {
             return (
               <motion.div key={item.usuario_id}
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.03 }}
+                transition={{ delay: Math.min(idx, 24) * 0.015 }}
                 className={`flex items-center p-3 rounded-xl ${
                   isMe ? 'bg-oro-bright/20 border-2 border-oro-bright' : 'bg-white/10'
                 }`}>

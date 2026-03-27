@@ -59,13 +59,13 @@ function JerseySlot({
         rotateY: { duration: 0.45, ease: 'linear' },
       }}
     >
-      <div className="relative w-12 h-12 md:w-14 md:h-14 flex items-center justify-center">
+      <div className="relative w-12 h-12 md:w-[54px] md:h-[54px] flex items-center justify-center">
         <div className="absolute inset-0 flex items-center justify-center">
           <Image
             src="/camiseta.png"
             alt={`Posicion ${pos.numero}`}
             fill
-            sizes="56px"
+            sizes="(min-width: 768px) 54px, 48px"
             className={`object-contain ${
               isEmpty ? 'opacity-50 grayscale drop-shadow-lg' : 'opacity-100 drop-shadow-lg'
             } ${
@@ -79,7 +79,7 @@ function JerseySlot({
               src="/camiseta.png"
               alt=""
               fill
-              sizes="56px"
+              sizes="(min-width: 768px) 54px, 48px"
               aria-hidden
               className="object-contain pointer-events-none"
               style={{
@@ -91,21 +91,33 @@ function JerseySlot({
             />
           )}
         </div>
-        <span className="relative z-10 text-xs md:text-sm font-extrabold text-azul drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">
+        <span className="relative z-10 text-xs md:text-[12px] font-extrabold text-azul drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">
           {pos.numero}
         </span>
         {isCapitan && (
-          <div className="absolute -top-1 -right-1 w-[18px] h-[10px] flex items-center justify-center">
-            <Image src="/captain-band.png" alt="Capitán" width={18} height={10} className="object-contain" />
+          <div className="absolute -top-1 -right-1 w-[18px] h-[10px] md:w-[14px] md:h-[8px] flex items-center justify-center overflow-visible">
+            <Image
+              src="/captain-band.png"
+              alt="Capitán"
+              width={18}
+              height={10}
+              className="object-contain md:scale-[0.78] origin-center"
+            />
           </div>
         )}
         {isPateador && (
-          <div className="absolute -top-1 -left-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center">
-            <Image src="/rugby-ball.png" alt="Pateador" width={24} height={24} className="object-contain" />
+          <div className="absolute -top-1 -left-1 w-5 h-5 md:w-[18px] md:h-[18px] flex items-center justify-center">
+            <Image
+              src="/rugby-ball.png"
+              alt="Pateador"
+              width={24}
+              height={24}
+              className="object-contain w-5 h-5 md:w-[18px] md:h-[18px]"
+            />
           </div>
         )}
       </div>
-      <div className="mt-1 px-2 py-1 rounded-full bg-azul flex flex-col items-center gap-0.5 min-w-[84px]">
+      <div className="mt-1 px-2 py-1 rounded-full bg-azul flex flex-col items-center gap-0.5 min-w-[84px] md:mt-0.5 md:px-2 md:py-0.5 md:min-w-0 md:max-w-[76px] md:w-max">
         <button
           type="button"
           disabled={!jugador || !onPlayerScoreClick}
@@ -114,7 +126,7 @@ function JerseySlot({
             if (!jugador || !onPlayerScoreClick) return;
             onPlayerScoreClick(jugador.id);
           }}
-          className="text-[10px] md:text-[11px] text-white font-semibold max-w-[80px] block truncate text-center"
+          className="text-[10px] md:text-[10px] text-white font-semibold max-w-[80px] md:max-w-[74px] px-0 md:px-0.5 leading-tight block truncate text-center"
         >
           {jugador ? (jugador.apellido || jugador.nombre) : `#${pos.numero}`}
         </button>
@@ -126,7 +138,7 @@ function JerseySlot({
               if (!onPlayerScoreClick) return;
               onPlayerScoreClick(jugador.id);
             }}
-            className="text-[10px] text-oro font-bold leading-none"
+            className="text-[10px] md:text-[10px] text-oro font-bold leading-none"
           >
             {puntosJugador} pts
           </button>
