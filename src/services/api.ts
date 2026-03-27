@@ -362,6 +362,7 @@ export async function updatePartidoResult(
   options: {
     try_penal_local: number;
     try_penal_visitante: number;
+    /** Si true, persiste marcador; si false, limpia puntos_local/puntos_visitante a NULL. */
     actualizarMarcador: boolean;
     puntos_local?: number | null;
     puntos_visitante?: number | null;
@@ -370,31 +371,24 @@ export async function updatePartidoResult(
   const patch: Record<string, number | null> = {
     try_penal_local: Math.max(0, options.try_penal_local),
     try_penal_visitante: Math.max(0, options.try_penal_visitante),
+    puntos_local: options.actualizarMarcador ? options.puntos_local ?? null : null,
+    puntos_visitante: options.actualizarMarcador ? options.puntos_visitante ?? null : null,
   };
-  if (options.actualizarMarcador) {
-    patch.puntos_local = options.puntos_local ?? null;
-    patch.puntos_visitante = options.puntos_visitante ?? null;
-  }
   const { error } = await supabase.from('fixture').update(patch).eq('id', partidoId);
   if (!error) return undefined;
 
   if (isTryPenalColumnsMissingError(error)) {
-    if (options.actualizarMarcador) {
-      const { error: err2 } = await supabase
-        .from('fixture')
-        .update({
-          puntos_local: options.puntos_local ?? null,
-          puntos_visitante: options.puntos_visitante ?? null,
-        })
-        .eq('id', partidoId);
-      if (err2) throw err2;
-      return (
-        'El marcador se guardó, pero tu proyecto Supabase no tiene las columnas try_penal_local / try_penal_visitante. ' +
-        'En SQL Editor ejecutá supabase/migrations/20250326110000_fixture_try_penal.sql y volvé a guardar.'
-      );
-    }
-    throw new Error(
-      'Tu proyecto Supabase no tiene las columnas de try penal en fixture. En SQL Editor ejecutá: supabase/migrations/20250326110000_fixture_try_penal.sql'
+    const { error: err2 } = await supabase
+      .from('fixture')
+      .update({
+        puntos_local: options.actualizarMarcador ? options.puntos_local ?? null : null,
+        puntos_visitante: options.actualizarMarcador ? options.puntos_visitante ?? null : null,
+      })
+      .eq('id', partidoId);
+    if (err2) throw err2;
+    return (
+      'El marcador se guardó, pero tu proyecto Supabase no tiene las columnas try_penal_local / try_penal_visitante. ' +
+      'En SQL Editor ejecutá supabase/migrations/20250326110000_fixture_try_penal.sql y volvé a guardar.'
     );
   }
 
