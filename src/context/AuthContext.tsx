@@ -40,6 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const loadSeq = useRef(0);
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
 
   const loadUserProfile = useCallback(async (authUser: User, seq: number) => {
     try {
@@ -77,11 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const { data: { session } } = await withTimeout(supabase.auth.getSession(), AUTH_TIMEOUT_MS);
         if (!mounted) return;
-        setUser(session?.user ?? null);
-        if (session?.user) {
+        const sessUser = session?.user ?? null;
+        setUser(sessUser);
+        userRef.current = sessUser;
+        if (sessUser) {
           const seq = ++loadSeq.current;
           setLoading(true);
-          await loadUserProfile(session.user, seq);
+          await loadUserProfile(sessUser, seq);
         } else {
           setUsuario(null);
         }
@@ -89,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('Auth getSession error:', err);
         if (mounted) {
           setUser(null);
+          userRef.current = null;
           setUsuario(null);
         }
       } finally {
@@ -100,8 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       if (event === 'INITIAL_SESSION') return;
 
+      const priorId = userRef.current?.id;
       const u = session?.user ?? null;
       setUser(u);
+      userRef.current = u;
 
       if (!u) {
         loadSeq.current += 1;
@@ -111,6 +118,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const seq = ++loadSeq.current;
+      // Misma sesión (TOKEN_REFRESHED, SIGNED_IN al volver a la pestaña, etc.): sin spinner global.
+      if (priorId === u.id) {
+        await loadUserProfile(u, seq);
+        return;
+      }
+
       setLoading(true);
       try {
         await loadUserProfile(u, seq);
@@ -165,12 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) return;
     const seq = ++loadSeq.current;
-    setLoading(true);
-    try {
-      await loadUserProfile(u, seq);
-    } finally {
-      if (seq === loadSeq.current) setLoading(false);
-    }
+    await loadUserProfile(u, seq);
   }, [loadUserProfile]);
 
   const value = useMemo<AuthContextValue>(

@@ -39,6 +39,8 @@ export interface Fecha {
   fecha_fin: string;
   bloqueada: boolean;
   activa: boolean;
+  /** Si false, la web no muestra ganador/tarjeta de puntos en Inicio ni puntajes+desglose en Mi Equipo para esta fecha. */
+  resultados_publicados: boolean;
 }
 
 export interface EquipoFecha {

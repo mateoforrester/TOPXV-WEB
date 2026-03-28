@@ -80,6 +80,7 @@ export default function InicioPage() {
   const [showMejorXV, setShowMejorXV] = useState(false);
 
   const ultimaFecha = ultimaFechaCompletada(fechas);
+  const ultimaFechaResultadosPublicados = ultimaFecha?.resultados_publicados === true;
   const proxima = proximaFecha(fechas, estadoVentana ?? { estado: 'sin_ventana' });
 
   useEffect(() => { loadData(); }, [usuario?.id]);
@@ -94,7 +95,8 @@ export default function InicioPage() {
       setRanking(rankingData); setFechas(fechasData); setEstadoVentana(estado);
       const ultima = ultimaFechaCompletada(fechasData);
       const prox = proximaFecha(fechasData, estado);
-      const rfPromise = ultima?.id
+      const resultadosUltimaPublicados = ultima?.resultados_publicados === true;
+      const rfPromise = ultima?.id && resultadosUltimaPublicados
         ? withTimeout(getRankingFecha(ultima.id), 15000)
         : Promise.resolve([] as Awaited<ReturnType<typeof getRankingFecha>>);
       const mejorXVPromise = withTimeout(getMejorXVGeneralSlots(), 15000);
@@ -102,7 +104,7 @@ export default function InicioPage() {
         ? withTimeout(getFixture(prox.id), 15000)
         : Promise.resolve([] as Partido[]);
       const [rf, mejorXV, fixtureProx] = await Promise.all([rfPromise, mejorXVPromise, fixturePromise]);
-      if (ultima?.id && rf.length) {
+      if (ultima?.id && resultadosUltimaPublicados && rf.length) {
         setGanadorUltima(rf[0] ?? null);
         if (usuario?.id) {
           const mi = rf.find(r => r.usuario_id === usuario.id);
@@ -221,7 +223,9 @@ export default function InicioPage() {
                       <div className="h-[3px] bg-oro" />
                       <div className="p-5">
                         <h4 className="text-sm font-bold text-white/90 mb-2">Ganador</h4>
-                        {ganadorUltima ? (
+                        {!ultimaFechaResultadosPublicados ? (
+                          <p className="text-sm text-white/50 italic">Resultados pendientes de publicación</p>
+                        ) : ganadorUltima ? (
                           <>
                             <p className="text-base font-semibold text-white/90">
                               {ganadorUltima.usuario?.nombre ?? '-'}
@@ -231,12 +235,14 @@ export default function InicioPage() {
                               {ganadorUltima.puntos_fecha ?? ganadorUltima.puntos_totales} pts
                             </p>
                           </>
-                        ) : <p className="text-sm text-white/50 italic">Aun no hay resultados</p>}
+                        ) : (
+                          <p className="text-sm text-white/50 italic">Aun no hay resultados</p>
+                        )}
                       </div>
                     </div>
                   </AnimatedCard>
                 )}
-                {ultimaFecha && miPtsUltimaFecha != null && (
+                {ultimaFecha && ultimaFechaResultadosPublicados && miPtsUltimaFecha != null && (
                   <AnimatedCard delay={0.22}>
                     <button
                       onClick={() => router.push(`/mi-equipo?fecha=${ultimaFecha.id}`)}

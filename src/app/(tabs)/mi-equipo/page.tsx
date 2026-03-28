@@ -40,6 +40,9 @@ function countCambios(jugadores: JugadorPosicion[], anterior: EquipoFecha | null
   return c;
 }
 
+/** Contexto explícito para evitar leer `fechaActiva`/`fechaEnJuegoNum` del state antes del re-render tras `setState` en `loadData`. */
+type CargaEquipoContext = { fechaActiva: Fecha | null; fechaEnJuegoNum: number | null };
+
 export default function MiEquipoPage() {
   const { user, usuario } = useAuth();
   const searchParams = useSearchParams();
@@ -90,12 +93,18 @@ export default function MiEquipoPage() {
     setJugadoresData(m);
   };
 
-  const loadEquipoVisualizado = async (uid: string, viewedFechaId: string) => {
-    const isFechaEditableSeleccionada = !!fechaActiva && viewedFechaId === fechaActiva.id && fechaEnJuegoNum == null;
+  const loadEquipoVisualizado = async (
+    uid: string,
+    viewedFechaId: string,
+    context?: CargaEquipoContext
+  ) => {
+    const fa = context ? context.fechaActiva : fechaActiva;
+    const fej = context ? context.fechaEnJuegoNum : fechaEnJuegoNum;
+    const isFechaEditableSeleccionada = !!fa && viewedFechaId === fa.id && fej == null;
 
     if (isFechaEditableSeleccionada) {
       setJustSelectedPositions([]);
-      const fecha = fechaActiva!;
+      const fecha = fa;
       const [equipoData, fechaAnterior] = await Promise.all([
         getEquipoFecha(uid, fecha.id),
         getFechaPorNumero(fecha.numero - 1),
@@ -113,10 +122,25 @@ export default function MiEquipoPage() {
         ? normalizarJugadores(equipoData!.jugadores)
         : (anterior?.jugadores?.length ? normalizarJugadores(anterior.jugadores) : initialJugadores.map(j => ({ ...j })));
       const full = armarEquipoCompleto(raw);
+      const capId = (tieneActual ? equipoData?.capitan_id : anterior?.capitan_id) ?? undefined;
+      const patId = (tieneActual ? equipoData?.pateador_id : anterior?.pateador_id) ?? undefined;
       setEquipo(full);
-      setCapitanId((tieneActual ? equipoData?.capitan_id : anterior?.capitan_id) ?? undefined);
-      setPateadorId((tieneActual ? equipoData?.pateador_id : anterior?.pateador_id) ?? undefined);
+      setCapitanId(capId);
+      setPateadorId(patId);
       await hydrateJugadores(full);
+      // Sin equipo guardado aún para esta fecha: persistir la plantilla (p. ej. copiada de la fecha anterior).
+      const tieneJugadoresEnPlantilla = full.some((j) => j.jugador_id);
+      if (!tieneActual && tieneJugadoresEnPlantilla) {
+        setSaving(true);
+        try {
+          await saveEquipoFecha(uid, fecha.id, full, capId, patId, anterior);
+        } catch (e) {
+          console.error('Error auto-guardando equipo desde fecha anterior:', e);
+          showToast('No se pudo guardar el equipo automáticamente. Probá tocando un jugador o reintentá.');
+        } finally {
+          setSaving(false);
+        }
+      }
       return;
     }
 
@@ -148,18 +172,22 @@ export default function MiEquipoPage() {
       setFechas(fechasTodas);
 
       let defaultViewedId: string | null = null;
+      let cargaContext: CargaEquipoContext;
       if (estado.estado === 'armar_equipo') {
         setFechaActiva(estado.fecha);
         setFechaEnJuegoNum(null);
+        cargaContext = { fechaActiva: estado.fecha, fechaEnJuegoNum: null };
         defaultViewedId = estado.fecha.id;
       } else if (estado.estado === 'fecha_en_juego') {
         setFechaActiva(null);
         setFechaEnJuegoNum(estado.numero);
+        cargaContext = { fechaActiva: null, fechaEnJuegoNum: estado.numero };
         const fej = await getFechaPorNumero(estado.numero);
         defaultViewedId = fej?.id ?? (fechasTodas.length ? fechasTodas[fechasTodas.length - 1].id : null);
       } else {
         setFechaActiva(null);
         setFechaEnJuegoNum(null);
+        cargaContext = { fechaActiva: null, fechaEnJuegoNum: null };
         defaultViewedId = fechasTodas.length ? fechasTodas[fechasTodas.length - 1].id : null;
       }
       setFechaDefaultId(defaultViewedId);
@@ -171,7 +199,7 @@ export default function MiEquipoPage() {
       const nextViewedId = fechaParamValid ?? (stillValidSelected ? fechaVisualizadaId : defaultViewedId);
       setFechaVisualizadaId(nextViewedId);
       if (nextViewedId) {
-        await loadEquipoVisualizado(uid, nextViewedId);
+        await loadEquipoVisualizado(uid, nextViewedId, cargaContext);
       } else {
         setEquipo(initialJugadores.map(j => ({ ...j })));
         setEquipoAnterior(null);
@@ -288,6 +316,11 @@ export default function MiEquipoPage() {
     return equipo.filter(j => j.jugador_id && jugadoresData[j.jugador_id]).map(j => jugadoresData[j.jugador_id]);
   }, [equipo, jugadoresData]);
 
+  const fechaVisualizada = useMemo(
+    () => fechas.find(f => f.id === (fechaVisualizadaId || fechaDefaultId)) || null,
+    [fechas, fechaVisualizadaId, fechaDefaultId]
+  );
+
   useEffect(() => {
     const fechaId = fechaVisualizadaId || fechaDefaultId;
     const jugadorIds = Array.from(new Set(equipo.map((j) => j.jugador_id).filter(Boolean)));
@@ -298,6 +331,10 @@ export default function MiEquipoPage() {
       // Si la fecha es editable (actual), no mostramos ni cargamos puntos todavía.
       // Los puntajes se consultan solo para fechas ya cerradas / modo lectura.
       if (isFechaEditable) {
+        if (!cancelled) setPuntajesFechaByJugador({});
+        return;
+      }
+      if (fechaVisualizada && fechaVisualizada.resultados_publicados === false) {
         if (!cancelled) setPuntajesFechaByJugador({});
         return;
       }
@@ -316,7 +353,7 @@ export default function MiEquipoPage() {
 
     void cargarPuntajes();
     return () => { cancelled = true; };
-  }, [equipo, fechaVisualizadaId, fechaDefaultId, fechaActiva, fechaEnJuegoNum]);
+  }, [equipo, fechaVisualizadaId, fechaDefaultId, fechaActiva, fechaEnJuegoNum, fechaVisualizada]);
 
   const changedComparedToPrevious = useMemo(() => {
     if (!equipoAnterior?.jugadores?.length) return [];
@@ -334,14 +371,18 @@ export default function MiEquipoPage() {
     setModalCP(null);
   };
 
-  const fechaVisualizada = useMemo(
-    () => fechas.find(f => f.id === (fechaVisualizadaId || fechaDefaultId)) || null,
-    [fechas, fechaVisualizadaId, fechaDefaultId]
-  );
   const effectiveViewedId = fechaVisualizadaId || fechaDefaultId;
   const canEdit = !!fechaActiva && effectiveViewedId === fechaActiva.id && fechaEnJuegoNum == null;
   const readOnly = !canEdit;
-  const subtitle = fechaVisualizada ? `Fecha ${fechaVisualizada.numero}` : null;
+  const subtitle = useMemo(() => {
+    if (!fechaVisualizada) return null;
+    const n = fechaVisualizada.numero;
+    if (fechaEnJuegoNum != null && n === fechaEnJuegoNum) {
+      return `Fecha ${n} en juego`;
+    }
+    return `Fecha ${n}`;
+  }, [fechaVisualizada, fechaEnJuegoNum]);
+
   const fechaBaseNumero = fechaActiva?.numero ?? fechaEnJuegoNum ?? Number.MAX_SAFE_INTEGER;
   const fechasHistorial = useMemo(
     () => fechas.filter((f) => f.numero < fechaBaseNumero).sort((a, b) => b.numero - a.numero),
