@@ -17,18 +17,19 @@ import {
   ChevronRight, Shirt, Calendar, Trophy, X, RotateCcw,
 } from 'lucide-react';
 import { withTimeout } from '@/utils/withTimeout';
+import Image from 'next/image';
 
 function ClubLogo({ club, size = 28 }: { club: Club; size?: number }) {
   const [err, setErr] = useState(false);
   if (club.logo_url && !err) {
     return (
-      <img
+      <Image
         src={club.logo_url}
         alt={club.nombre}
         width={size}
         height={size}
-        className="rounded-lg object-contain w-full h-full"
-        style={{ width: size, height: size }}
+        className="rounded-lg object-contain"
+        sizes={`${size}px`}
         onError={() => setErr(true)}
       />
     );
